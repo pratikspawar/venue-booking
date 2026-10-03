@@ -26,22 +26,99 @@ services:
       retries: 5
       start_period: 20s
 
-  api:
+  api-gateway:
     build:
       context: ../..
-      dockerfile: deploy/docker/Dockerfile.api
-    container_name: venue-booking-api
+      dockerfile: deploy/docker/Dockerfile.gateway
+    container_name: venue-api-gateway
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      AUTH_SERVICE_HOST: auth-service
+      AUTH_SERVICE_PORT: 8081
+      CATALOG_SERVICE_HOST: catalog-service
+      CATALOG_SERVICE_PORT: 8082
+      BOOKING_SERVICE_HOST: booking-service
+      BOOKING_SERVICE_PORT: 8083
+      PAYMENT_SERVICE_HOST: payment-service
+      PAYMENT_SERVICE_PORT: 8084
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      - auth-service
+      - catalog-service
+      - booking-service
+      - payment-service
+
+  auth-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.auth
+    container_name: venue-auth-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: venue_booking
       DB_USER: venue_user
       DB_PASSWORD: venue_password
       JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  catalog-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.catalog
+    container_name: venue-catalog-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: venue_booking
+      DB_USER: venue_user
+      DB_PASSWORD: venue_password
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  booking-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.booking
+    container_name: venue-booking-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: venue_booking
+      DB_USER: venue_user
+      DB_PASSWORD: venue_password
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.payment
+    container_name: venue-payment-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: venue_booking
+      DB_USER: venue_user
+      DB_PASSWORD: venue_password
     depends_on:
       mysql:
         condition: service_healthy
@@ -55,7 +132,7 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - api
+      - api-gateway
 
 volumes:
   mysql_data:

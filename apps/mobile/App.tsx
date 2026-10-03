@@ -1,76 +1,82 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import React from 'react';
+import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text, StatusBar } from 'react-native';
+import { useCustomerStore } from './src/store/useCustomerStore';
+import { ExploreScreen } from './src/screens/ExploreScreen';
+import { MyBookingsScreen } from './src/screens/MyBookingsScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
+import { CheckoutModal } from './src/components/CheckoutModal';
+import { AuthOtpModal } from './src/components/AuthOtpModal';
 
 export default function App() {
-  const [selectedSport, setSelectedSport] = useState('ALL');
+  const { activeTab, setActiveTab, myBookings } = useCustomerStore();
 
-  const sports = [
-    { code: 'ALL', name: 'All Games' },
-    { code: 'PLAYSTATION', name: 'PlayStation 5' },
-    { code: 'POOL', name: 'Snooker & Pool' },
-    { code: 'TURF', name: 'Box Turf' }
-  ];
+  const activeCount = myBookings.filter(
+    (b) => b.status === 'CONFIRMED' || b.status === 'HELD' || b.status === 'IN_PROGRESS'
+  ).length;
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Book Your Slot</Text>
-          <Text style={styles.subtitle}>Instant confirmation • Auto slot hold</Text>
-        </View>
+      <StatusBar barStyle="light-content" backgroundColor="#090d16" />
 
-        {/* Sport Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
-          {sports.map(s => (
-            <TouchableOpacity
-              key={s.code}
-              onPress={() => setSelectedSport(s.code)}
-              style={[styles.pill, selectedSport === s.code && styles.pillActive]}
-            >
-              <Text style={[styles.pillText, selectedSport === s.code && styles.pillTextActive]}>
-                {s.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {/* Screen Body */}
+      <View style={styles.body}>
+        {activeTab === 'explore' && <ExploreScreen />}
+        {activeTab === 'bookings' && <MyBookingsScreen />}
+        {activeTab === 'profile' && <ProfileScreen />}
+      </View>
 
-        {/* Available Venues List */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.venueName}>Apex Gaming Lounge</Text>
-            <Text style={styles.badge}>Live Available</Text>
+      {/* Bottom Navigation Bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('explore')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'explore' && styles.tabIconActive]}>
+            🎮
+          </Text>
+          <Text style={[styles.tabLabel, activeTab === 'explore' && styles.tabLabelActive]}>
+            Explore
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('bookings')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.badgeWrapper}>
+            <Text style={[styles.tabIcon, activeTab === 'bookings' && styles.tabIconActive]}>
+              🎟️
+            </Text>
+            {activeCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{activeCount}</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.venueAddress}>Bandra West, Mumbai • 0.8 km</Text>
+          <Text style={[styles.tabLabel, activeTab === 'bookings' && styles.tabLabelActive]}>
+            My Passes
+          </Text>
+        </TouchableOpacity>
 
-          <View style={styles.slotRow}>
-            <Text style={styles.slotLabel}>PS5 Lounge (Console #1)</Text>
-            <Text style={styles.slotPrice}>₹250 / hr</Text>
-          </View>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('profile')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'profile' && styles.tabIconActive]}>
+            👤
+          </Text>
+          <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>
+            Profile
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity style={styles.bookButton}>
-            <Text style={styles.bookButtonText}>Select Slot & Book</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.venueName}>Urban Turf & Snooker Club</Text>
-            <Text style={styles.badge}>Live Available</Text>
-          </View>
-          <Text style={styles.venueAddress}>Andheri East, Mumbai • 2.4 km</Text>
-
-          <View style={styles.slotRow}>
-            <Text style={styles.slotLabel}>Tournament 8-Ball Table</Text>
-            <Text style={styles.slotPrice}>₹300 / hr</Text>
-          </View>
-
-          <TouchableOpacity style={styles.bookButton}>
-            <Text style={styles.bookButtonText}>Select Slot & Book</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      {/* Global Bottom Sheets & Modals */}
+      <CheckoutModal />
+      <AuthOtpModal />
     </SafeAreaView>
   );
 }
@@ -78,109 +84,56 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090d16'
+    backgroundColor: '#090d16',
   },
-  content: {
-    padding: 20
+  body: {
+    flex: 1,
   },
-  header: {
-    marginBottom: 20
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#f8fafc',
-    marginBottom: 4
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#94a3b8'
-  },
-  pillsScroll: {
-    marginBottom: 24
-  },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)'
-  },
-  pillActive: {
-    backgroundColor: '#6366f1',
-    borderColor: '#818cf8'
-  },
-  pillText: {
-    color: '#94a3b8',
-    fontWeight: '600',
-    fontSize: 13
-  },
-  pillTextActive: {
-    color: '#ffffff'
-  },
-  card: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)'
-  },
-  cardHeader: {
+  tabBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6
+    backgroundColor: '#0f172a',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 10,
+    paddingBottom: 16,
   },
-  venueName: {
-    fontSize: 18,
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIcon: {
+    fontSize: 20,
+    opacity: 0.6,
+  },
+  tabIconActive: {
+    opacity: 1,
+  },
+  tabLabel: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  tabLabelActive: {
+    color: '#818cf8',
     fontWeight: '700',
-    color: '#ffffff'
+  },
+  badgeWrapper: {
+    position: 'relative',
   },
   badge: {
-    fontSize: 11,
-    color: '#10b981',
-    fontWeight: '700',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12
-  },
-  venueAddress: {
-    fontSize: 13,
-    color: '#64748b',
-    marginBottom: 16
-  },
-  slotRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    marginBottom: 16
-  },
-  slotLabel: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  slotPrice: {
-    color: '#818cf8',
-    fontSize: 15,
-    fontWeight: '700'
-  },
-  bookButton: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
     backgroundColor: '#6366f1',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center'
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
-  bookButtonText: {
+  badgeText: {
     color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 14
-  }
+    fontSize: 9,
+    fontWeight: '800',
+  },
 });

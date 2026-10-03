@@ -1,0 +1,110 @@
+name: CI and Docker Hub Publish
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: venue-booking-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '20'
+  # Defaults to "local" for pull-request image builds. Set DOCKERHUB_USERNAME
+  # as a GitHub Actions secret to publish to Docker Hub.
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || 'local' }}
+
+jobs:
+  verify:
+    name: Verify application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Verify backend services
+        run: mvn -B verify
+        working-directory: services
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            packages/shared/package-lock.json
+            apps/admin-web/package-lock.json
+
+      - name: Build shared TypeScript package
+        run: |
+          npm ci
+          npm run build
+        working-directory: packages/shared
+
+      - name: Build admin web application
+        run: |
+          npm ci
+          npm run build
+        working-directory: apps/admin-web
+
+  container-images:
+    name: Build ${{ matrix.image }} image
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: venue-api-gateway
+            dockerfile: deploy/docker/Dockerfile.gateway
+          - image: venue-auth-service
+            dockerfile: deploy/docker/Dockerfile.auth
+          - image: venue-catalog-service
+            dockerfile: deploy/docker/Dockerfile.catalog
+          - image: venue-booking-service
+            dockerfile: deploy/docker/Dockerfile.booking
+          - image: venue-payment-service
+            dockerfile: deploy/docker/Dockerfile.payment
+          - image: venue-admin-web
+            dockerfile: deploy/docker/Dockerfile.admin
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name == 'push' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
