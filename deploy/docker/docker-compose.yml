@@ -28,8 +28,8 @@ services:
 
   api:
     build:
-      context: ../../apps/api
-      dockerfile: ../../deploy/docker/Dockerfile.api
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
     container_name: venue-booking-api
     restart: unless-stopped
     ports:
@@ -48,8 +48,8 @@ services:
 
   admin-web:
     build:
-      context: ../../apps/admin-web
-      dockerfile: ../../deploy/docker/Dockerfile.admin
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.admin
     container_name: venue-booking-admin-web
     restart: unless-stopped
     ports:
