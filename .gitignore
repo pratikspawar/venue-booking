@@ -1,0 +1,58 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+dist/
+build/
+.cache/
+
+# Java & Maven
+target/
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+.mvn/wrapper/maven-wrapper.jar
+
+# IDEs & Editors
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# Local Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+
+# Expo / React Native
+.expo/
+web-build/
+android/
+ios/
+
+# Logs & Monitoring
+logs/
+*.log
