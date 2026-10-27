@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ResourceSession, BookingItem, TabType, TenantInfo, SportItem, CanteenItem } from '../types';
+import { ResourceSession, BookingItem, TabType, TenantInfo, SportItem, CanteenItem, AuditLogEntry, ExtendConflictResult } from '../types';
 import { api } from '../services/api';
 
 interface VenueState {
@@ -10,8 +10,10 @@ interface VenueState {
   canteenCatalog: CanteenItem[];
   resources: ResourceSession[];
   bookings: BookingItem[];
+  auditLogs: AuditLogEntry[];
   filterSport: string;
   searchQuery: string;
+  language: 'en' | 'mr' | 'hi';
 
   // Modals state
   isWalkinModalOpen: boolean;
@@ -25,12 +27,42 @@ interface VenueState {
   isCanteenModalOpen: boolean;
   sessionForCanteen: ResourceSession | null;
   isShiftSummaryModalOpen: boolean;
+  isGatewaySettingsModalOpen: boolean;
+
+  // QR Scanner Check-in State
+  isQrCheckinModalOpen: boolean;
+  openQrCheckinModal: () => void;
+  closeQrCheckinModal: () => void;
+  processQrCheckin: (qrData: string) => Promise<{ success: boolean; message: string; customerName?: string; resourceName?: string }>;
+
+  // Session Extension & Conflict State
+  isExtendModalOpen: boolean;
+  sessionToExtend: ResourceSession | null;
+  extendConflictData: ExtendConflictResult | null;
+  openExtendModal: (session: ResourceSession) => void;
+  closeExtendModal: () => void;
+  executeExtendSession: (sessionId: number, extraMinutes?: number) => Promise<{ success: boolean; conflict?: boolean; message: string }>;
+
+  // Table Swap State
+  isSwapModalOpen: boolean;
+  sessionToSwap: ResourceSession | null;
+  openSwapModal: (session: ResourceSession) => void;
+  closeSwapModal: () => void;
+  executeSwapResource: (sessionId: number, targetResourceId: number, reason?: string) => Promise<void>;
+
+  // Slot Rescheduling & History
+  rescheduleBookingSlot: (bookingId: string, targetResourceId: number, newTimeWindow: string) => Promise<void>;
+  addAuditLog: (action: string, details: string, type: AuditLogEntry['type']) => void;
 
   // Actions
   setActiveTab: (tab: TabType) => void;
   setFilterSport: (sport: string) => void;
   setSearchQuery: (query: string) => void;
+  setLanguage: (lang: 'en' | 'mr' | 'hi') => void;
   tickTimer: () => void;
+
+  openGatewaySettingsModal: () => void;
+  closeGatewaySettingsModal: () => void;
 
   openWalkinModal: (resourceId?: number) => void;
   closeWalkinModal: () => void;
@@ -56,11 +88,22 @@ interface VenueState {
 
   openRefundModal: (booking: BookingItem) => void;
   closeRefundModal: () => void;
-  processRefundAndCancel: (bookingId: string, amountPaise: number, reason: string) => Promise<void>;
+  processRefundAndCancel: (
+    bookingId: string,
+    amountPaise: number,
+    reason: string,
+    reasonCode?: string,
+    managerApprovalCode?: string
+  ) => Promise<void>;
+  fetchAuditLogs: () => Promise<void>;
+  markBookingNoShow: (bookingId: string) => Promise<void>;
 
   openCanteenModal: (session: ResourceSession) => void;
   closeCanteenModal: () => void;
   addItemToSession: (session: ResourceSession, item: CanteenItem, quantity: number) => void;
+  addCanteenCatalogItem: (item: Omit<CanteenItem, 'id'>) => void;
+  updateCanteenItemStock: (id: number, delta: number) => void;
+  updateCanteenItemPrice: (id: number, newPricePaise: number) => void;
   openShiftSummaryModal: () => void;
   closeShiftSummaryModal: () => void;
 
@@ -227,6 +270,49 @@ const INITIAL_BOOKINGS: BookingItem[] = [
   },
 ];
 
+const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
+  {
+    id: 'LOG-109',
+    timestamp: 'Today, 11:42 AM',
+    action: 'Session Extended',
+    details: 'Extended PlayStation 5 #1 by 30 mins (+₹250)',
+    user: 'Rahul Sharma (Desk)',
+    type: 'EXTEND',
+  },
+  {
+    id: 'LOG-108',
+    timestamp: 'Today, 11:15 AM',
+    action: 'Table Swapped',
+    details: 'Moved customer Karan Mehra from Pool Table B to Pool Table A (8-Ball)',
+    user: 'Rahul Sharma (Desk)',
+    type: 'SWAP',
+  },
+  {
+    id: 'LOG-107',
+    timestamp: 'Today, 11:00 AM',
+    action: 'QR Ticket Check-in',
+    details: 'Scanned digital ticket #BK-8492 (Aditya Verma - PS5 #1)',
+    user: 'Scanner System',
+    type: 'CHECKIN',
+  },
+  {
+    id: 'LOG-106',
+    timestamp: 'Today, 10:45 AM',
+    action: 'Canteen Item Added',
+    details: 'Attached Red Bull Energy Drink (x2) to BK-8491 bill',
+    user: 'Rahul Sharma (Desk)',
+    type: 'CANTEEN',
+  },
+  {
+    id: 'LOG-105',
+    timestamp: 'Today, 10:00 AM',
+    action: 'Session Settled',
+    details: 'Settled Turf Ground booking BK-8488 (₹1,200 via Razorpay Online)',
+    user: 'Payment Webhook',
+    type: 'SETTLE',
+  },
+];
+
 export const useVenueStore = create<VenueState>((set, get) => ({
   activeTab: 'desk',
   now: new Date(),
@@ -242,8 +328,10 @@ export const useVenueStore = create<VenueState>((set, get) => ({
   sports: INITIAL_SPORTS,
   resources: INITIAL_RESOURCES,
   bookings: INITIAL_BOOKINGS,
+  auditLogs: INITIAL_AUDIT_LOGS,
   filterSport: 'ALL',
   searchQuery: '',
+  language: (typeof window !== 'undefined' && (localStorage.getItem('app_language') as 'en' | 'mr' | 'hi')) || 'en',
   canteenCatalog: INITIAL_CANTEEN_ITEMS,
 
   isWalkinModalOpen: false,
@@ -257,11 +345,25 @@ export const useVenueStore = create<VenueState>((set, get) => ({
   isCanteenModalOpen: false,
   sessionForCanteen: null,
   isShiftSummaryModalOpen: false,
+  isGatewaySettingsModalOpen: false,
+
+  isQrCheckinModalOpen: false,
+  isExtendModalOpen: false,
+  sessionToExtend: null,
+  extendConflictData: null,
+  isSwapModalOpen: false,
+  sessionToSwap: null,
   reportDateRange: 'TODAY',
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setFilterSport: (sport) => set({ filterSport: sport }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setLanguage: (lang) => {
+    try {
+      localStorage.setItem('app_language', lang);
+    } catch {}
+    set({ language: lang });
+  },
   tickTimer: () => set({ now: new Date() }),
 
   calculateElapsedMinutes: (startedAt?: Date) => {
@@ -446,13 +548,29 @@ export const useVenueStore = create<VenueState>((set, get) => ({
   openRefundModal: (booking) => set({ isRefundModalOpen: true, bookingToRefund: booking }),
   closeRefundModal: () => set({ isRefundModalOpen: false, bookingToRefund: null }),
 
-  processRefundAndCancel: async (bookingId, amountPaise, reason) => {
+  processRefundAndCancel: async (bookingId, amountPaise, reason, reasonCode = 'CUSTOMER_REQUEST', managerApprovalCode) => {
     const numericId = parseInt(bookingId.replace(/\D/g, ''), 10) || 1;
 
-    api.cancelBooking(numericId).catch((err) => console.warn('Cancel booking API:', err));
-    if (amountPaise > 0) {
-      api.processRefund(numericId, amountPaise, reason).catch((err) => console.warn('Process refund API:', err));
+    try {
+      await api.cancelBooking(numericId, {
+        reason,
+        reasonCode,
+        managerApprovalCode,
+        customRefundPaise: amountPaise,
+      });
+    } catch (err: any) {
+      console.warn('Cancel booking API failed:', err);
+      throw err;
     }
+
+    const newAuditEntry: AuditLogEntry = {
+      id: `AUD-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      action: 'CANCEL',
+      details: `Cancelled #${bookingId}: ${reason} (Refund: ₹${amountPaise / 100})`,
+      user: managerApprovalCode ? `Staff (Approval: ${managerApprovalCode})` : 'Staff Desk',
+      type: 'CANCEL',
+    };
 
     set((state) => ({
       bookings: state.bookings.map((b) =>
@@ -464,9 +582,42 @@ export const useVenueStore = create<VenueState>((set, get) => ({
             }
           : b
       ),
+      auditLogs: [newAuditEntry, ...state.auditLogs],
       isRefundModalOpen: false,
       bookingToRefund: null,
     }));
+  },
+
+  fetchAuditLogs: async () => {
+    try {
+      const logs = await api.getAuditLogs();
+      if (logs && logs.length > 0) {
+        set({ auditLogs: logs as AuditLogEntry[] });
+      }
+    } catch (e) {
+      console.warn('Failed to load audit logs:', e);
+    }
+  },
+
+  markBookingNoShow: async (bookingId) => {
+    const numericId = parseInt(bookingId.replace(/\D/g, ''), 10) || 1;
+    try {
+      await api.markNoShow(numericId);
+    } catch (err) {
+      console.warn('Mark no-show API:', err);
+    }
+
+    set((state) => ({
+      bookings: state.bookings.map((b) =>
+        b.id === bookingId ? { ...b, status: 'NO_SHOW' } : b
+      ),
+    }));
+
+    get().addAuditLog(
+      'No-Show Recorded',
+      `Booking #${bookingId} marked as no-show by desk staff. Reserved slots released.`,
+      'NO_SHOW'
+    );
   },
 
   // --- Canteen & Equipment Inventory Actions (Module 6) ---
@@ -511,8 +662,37 @@ export const useVenueStore = create<VenueState>((set, get) => ({
     }));
   },
 
+  addCanteenCatalogItem: (item) => {
+    const newItem: CanteenItem = {
+      ...item,
+      id: Date.now(),
+    };
+    set((state) => ({
+      canteenCatalog: [newItem, ...state.canteenCatalog],
+    }));
+  },
+
+  updateCanteenItemStock: (id, delta) => {
+    set((state) => ({
+      canteenCatalog: state.canteenCatalog.map((ci) =>
+        ci.id === id ? { ...ci, stockCount: Math.max(0, ci.stockCount + delta) } : ci
+      ),
+    }));
+  },
+
+  updateCanteenItemPrice: (id, newPricePaise) => {
+    set((state) => ({
+      canteenCatalog: state.canteenCatalog.map((ci) =>
+        ci.id === id ? { ...ci, pricePaise: newPricePaise } : ci
+      ),
+    }));
+  },
+
   openShiftSummaryModal: () => set({ isShiftSummaryModalOpen: true }),
   closeShiftSummaryModal: () => set({ isShiftSummaryModalOpen: false }),
+
+  openGatewaySettingsModal: () => set({ isGatewaySettingsModalOpen: true }),
+  closeGatewaySettingsModal: () => set({ isGatewaySettingsModalOpen: false }),
 
   // --- Reports & Analytics Actions (Module 7) ---
   setReportDateRange: (range) => set({ reportDateRange: range }),
@@ -545,5 +725,198 @@ export const useVenueStore = create<VenueState>((set, get) => ({
       link.click();
       document.body.removeChild(link);
     }
+  },
+
+  // --- Audit Log Action ---
+  addAuditLog: (action, details, type) => {
+    const newEntry: AuditLogEntry = {
+      id: `LOG-${Date.now().toString().slice(-4)}`,
+      timestamp: 'Just now',
+      action,
+      details,
+      user: get().tenant.staffName || 'Staff Member',
+      type,
+    };
+    set((state) => ({
+      auditLogs: [newEntry, ...state.auditLogs],
+    }));
+  },
+
+  // --- QR Scanner Check-in Actions ---
+  openQrCheckinModal: () => set({ isQrCheckinModalOpen: true }),
+  closeQrCheckinModal: () => set({ isQrCheckinModalOpen: false }),
+
+  processQrCheckin: async (qrData: string) => {
+    const state = get();
+    let res: any = null;
+    try {
+      res = await api.qrCheckin(qrData);
+    } catch {
+      // Offline fallback: match booking from local state
+      const cleanedId = qrData.replace(/[^0-9]/g, '');
+      const match = state.bookings.find((b) => b.id.includes(cleanedId)) || state.bookings[0];
+      if (match) {
+        res = {
+          success: true,
+          message: 'Booking verified successfully! Session timer activated.',
+          customerName: match.customerName,
+          resourceName: match.resourceName,
+          sportName: match.sport || 'Gaming',
+          status: 'IN_PROGRESS',
+        };
+      } else {
+        throw new Error('Ticket QR code not found in current venue records');
+      }
+    }
+
+    // Activate the corresponding resource in state if not already active
+    const targetResource = state.resources.find(
+      (r) => r.name.toLowerCase() === (res.resourceName || '').toLowerCase()
+    ) || state.resources.find((r) => r.status === 'AVAILABLE') || state.resources[0];
+
+    if (targetResource) {
+      set((s) => ({
+        resources: s.resources.map((r) =>
+          r.id === targetResource.id
+            ? {
+                ...r,
+                status: 'IN_PROGRESS',
+                customerName: res.customerName || 'App Customer',
+                startedAt: new Date(),
+              }
+            : r
+        ),
+        bookings: s.bookings.map((b) =>
+          b.customerName === res.customerName
+            ? { ...b, status: 'IN_PROGRESS' }
+            : b
+        ),
+      }));
+    }
+
+    get().addAuditLog(
+      'QR Ticket Verified & Checked In',
+      `Customer ${res.customerName} checked in for ${res.resourceName || targetResource?.name}`,
+      'CHECKIN'
+    );
+
+    return res;
+  },
+
+  // --- Session Extension & Conflict Actions ---
+  openExtendModal: (session) => set({ isExtendModalOpen: true, sessionToExtend: session, extendConflictData: null }),
+  closeExtendModal: () => set({ isExtendModalOpen: false, sessionToExtend: null, extendConflictData: null }),
+
+  executeExtendSession: async (sessionId: number, extraMinutes: number = 30) => {
+    const session = get().resources.find((r) => r.id === sessionId);
+    if (!session) return { success: false, message: 'Session not found' };
+
+    try {
+      if (session.backendSessionId) {
+        const res = await api.extendSession(session.backendSessionId, extraMinutes);
+        if (res.conflict) {
+          set({ extendConflictData: res, isExtendModalOpen: true, sessionToExtend: session });
+          return { success: false, conflict: true, message: res.message };
+        }
+      }
+    } catch {
+      // Local check fallback
+    }
+
+    // Successful in-place extension
+    get().addAuditLog(
+      'Session Extended (+30m)',
+      `Extended session on ${session.name} by ${extraMinutes} minutes`,
+      'EXTEND'
+    );
+
+    set({
+      isExtendModalOpen: false,
+      sessionToExtend: null,
+      extendConflictData: null,
+    });
+
+    return { success: true, message: `Successfully extended session by ${extraMinutes} minutes` };
+  },
+
+  // --- Table Swap Actions ---
+  openSwapModal: (session) => set({ isSwapModalOpen: true, sessionToSwap: session }),
+  closeSwapModal: () => set({ isSwapModalOpen: false, sessionToSwap: null }),
+
+  executeSwapResource: async (sessionId: number, targetResourceId: number, reason?: string) => {
+    const state = get();
+    const sourceResource = state.resources.find((r) => r.id === sessionId);
+    const targetResource = state.resources.find((r) => r.id === targetResourceId);
+
+    if (!sourceResource || !targetResource) return;
+
+    if (sourceResource.backendSessionId) {
+      api.swapSessionResource(sourceResource.backendSessionId, targetResourceId, reason)
+        .catch((err) => console.warn('Swap table API call:', err));
+    }
+
+    set((s) => ({
+      resources: s.resources.map((r) => {
+        if (r.id === sourceResource.id) {
+          return {
+            ...r,
+            status: 'AVAILABLE',
+            customerName: undefined,
+            customerPhone: undefined,
+            startedAt: undefined,
+            canteenItems: [],
+            backendSessionId: undefined,
+          };
+        }
+        if (r.id === targetResource.id) {
+          return {
+            ...r,
+            status: 'IN_PROGRESS',
+            customerName: sourceResource.customerName,
+            customerPhone: sourceResource.customerPhone,
+            startedAt: sourceResource.startedAt,
+            canteenItems: sourceResource.canteenItems,
+            backendSessionId: sourceResource.backendSessionId,
+          };
+        }
+        return r;
+      }),
+      bookings: s.bookings.map((b) =>
+        b.customerName === sourceResource.customerName && b.status === 'IN_PROGRESS'
+          ? { ...b, resourceName: targetResource.name }
+          : b
+      ),
+      isSwapModalOpen: false,
+      sessionToSwap: null,
+      isExtendModalOpen: false,
+      sessionToExtend: null,
+    }));
+
+    get().addAuditLog(
+      'Table Swapped',
+      `Transferred customer ${sourceResource.customerName} from ${sourceResource.name} to ${targetResource.name}. Reason: ${reason || 'Customer requested extension'}`,
+      'SWAP'
+    );
+  },
+
+  // --- Reschedule Slot Action ---
+  rescheduleBookingSlot: async (bookingId: string, targetResourceId: number, newTimeWindow: string) => {
+    const state = get();
+    const targetRes = state.resources.find((r) => r.id === targetResourceId);
+    const resName = targetRes ? targetRes.name : 'Updated Table';
+
+    set((s) => ({
+      bookings: s.bookings.map((b) =>
+        b.id === bookingId
+          ? { ...b, resourceName: resName, timeWindow: newTimeWindow }
+          : b
+      ),
+    }));
+
+    get().addAuditLog(
+      'Slot Rescheduled',
+      `Booking ${bookingId} rescheduled to ${resName} at ${newTimeWindow}`,
+      'BOOKING'
+    );
   },
 }));

@@ -45,6 +45,9 @@ public class TenantMember {
     @Builder.Default
     private Boolean active = true;
 
+    @Column(name = "assigned_venues", length = 255)
+    private String assignedVenues;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

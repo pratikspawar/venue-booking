@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  labels:
+    app: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: ghcr.io/venue-booking/gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AUTH_SERVICE_HOST
+              value: "auth-service"
+            - name: AUTH_SERVICE_PORT
+              value: "8081"
+            - name: CATALOG_SERVICE_HOST
+              value: "catalog-service"
+            - name: CATALOG_SERVICE_PORT
+              value: "8082"
+            - name: BOOKING_SERVICE_HOST
+              value: "booking-service"
+            - name: BOOKING_SERVICE_PORT
+              value: "8083"
+            - name: PAYMENT_SERVICE_HOST
+              value: "payment-service"
+            - name: PAYMENT_SERVICE_PORT
+              value: "8084"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: venue-secrets
+                  key: jwt-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5

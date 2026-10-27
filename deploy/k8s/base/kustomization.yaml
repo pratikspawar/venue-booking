@@ -2,6 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - deployment-api.yaml
-  - service-api.yaml
+  - deployment-gateway.yaml
+  - deployment-services.yaml
+  - deployment-admin-web.yaml
   - ingress.yaml
+  - flyway-job.yaml

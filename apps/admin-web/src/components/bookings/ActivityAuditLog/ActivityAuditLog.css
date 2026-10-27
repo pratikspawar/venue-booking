@@ -1,0 +1,91 @@
+/* ActivityAuditLog component CSS */
+.audit-log-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.audit-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.audit-log-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audit-log-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary, #6366f1);
+}
+
+.audit-log-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-family: var(--font-display, inherit);
+}
+
+.audit-log-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.audit-log-search-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.audit-log-search-input-wrapper {
+  flex: 1;
+  min-width: 240px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.audit-log-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 8px);
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.audit-log-table-wrapper {
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.audit-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.audit-log-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.78rem;
+  font-weight: 700;
+}

@@ -51,6 +51,18 @@ public class CanteenItem {
     @Builder.Default
     private Boolean isEquipment = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "condition_status", nullable = false, length = 30)
+    @Builder.Default
+    private ConditionStatus conditionStatus = ConditionStatus.GOOD;
+
+    @Column(name = "deposit_paise", nullable = false)
+    @Builder.Default
+    private Long depositPaise = 0L;
+
+    @Column(name = "serial_number", length = 100)
+    private String serialNumber;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean active = true;
@@ -68,5 +80,13 @@ public class CanteenItem {
         BEVERAGE,
         EQUIPMENT_RENTAL,
         ACCESSORY
+    }
+
+    public enum ConditionStatus {
+        EXCELLENT,
+        GOOD,
+        FAIR,
+        MAINTENANCE,
+        DAMAGED
     }
 }

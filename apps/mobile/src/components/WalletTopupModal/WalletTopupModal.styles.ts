@@ -1,0 +1,220 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#0f172a',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '90%',
+    borderColor: '#334155',
+    borderWidth: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    color: '#f8fafc',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  sheetSub: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#1e293b',
+  },
+  closeBtnText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  scrollArea: {
+    marginBottom: 10,
+  },
+  balanceCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderColor: '#38bdf8',
+    borderWidth: 1,
+  },
+  balanceLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '600',
+  },
+  balanceValue: {
+    color: '#38bdf8',
+    fontSize: 32,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: '#7f1d1d',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  errorText: {
+    color: '#fca5a5',
+    fontSize: 13,
+  },
+  successBanner: {
+    backgroundColor: '#14532d',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  successText: {
+    color: '#86efac',
+    fontSize: 13,
+  },
+  sectionHeader: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  chip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+    borderColor: '#334155',
+    borderWidth: 1,
+  },
+  chipSelected: {
+    backgroundColor: '#4338ca',
+    borderColor: '#6366f1',
+  },
+  chipText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chipTextSelected: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderColor: '#334155',
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  rupeePrefix: {
+    color: '#94a3b8',
+    fontSize: 20,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  input: {
+    flex: 1,
+    height: 48,
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  payBtn: {
+    backgroundColor: '#6366f1',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366f1',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  payBtnDisabled: {
+    opacity: 0.6,
+  },
+  payBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  ledgerList: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  ledgerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomColor: '#334155',
+    borderBottomWidth: 1,
+  },
+  ledgerInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  ledgerDesc: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  ledgerMeta: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  ledgerAmountCol: {
+    alignItems: 'flex-end',
+  },
+  ledgerAmount: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  amountGreen: {
+    color: '#4ade80',
+  },
+  amountRed: {
+    color: '#f87171',
+  },
+  balanceAfter: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  emptyLedger: {
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+  },
+  emptyLedgerText: {
+    color: '#64748b',
+    fontSize: 13,
+  },
+});

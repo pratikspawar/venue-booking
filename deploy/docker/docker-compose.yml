@@ -11,12 +11,12 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --sql-mode="STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION"
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Copy .env.example to .env and configure local values}
       MYSQL_DATABASE: venue_booking
-      MYSQL_USER: venue_user
-      MYSQL_PASSWORD: venue_password
+      MYSQL_USER: ${DB_USER:?Set DB_USER in .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -43,12 +43,22 @@ services:
       BOOKING_SERVICE_PORT: 8083
       PAYMENT_SERVICE_HOST: payment-service
       PAYMENT_SERVICE_PORT: 8084
-      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
-      - auth-service
-      - catalog-service
-      - booking-service
-      - payment-service
+      auth-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
 
   auth-service:
     build:
@@ -56,15 +66,28 @@ services:
       dockerfile: deploy/docker/Dockerfile.auth
     container_name: venue-auth-service
     restart: unless-stopped
-    ports:
-      - "8081:8081"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: venue_booking
-      DB_USER: venue_user
-      DB_PASSWORD: venue_password
-      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      SMS_PROVIDER: ${SMS_PROVIDER:-mock}
+      MSG91_AUTH_KEY: ${MSG91_AUTH_KEY:-}
+      MSG91_TEMPLATE_ID: ${MSG91_TEMPLATE_ID:-}
+      MSG91_SENDER_ID: ${MSG91_SENDER_ID:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      OTP_HASH_PEPPER: ${OTP_HASH_PEPPER:?Set OTP_HASH_PEPPER in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       mysql:
         condition: service_healthy
@@ -75,14 +98,18 @@ services:
       dockerfile: deploy/docker/Dockerfile.catalog
     container_name: venue-catalog-service
     restart: unless-stopped
-    ports:
-      - "8082:8082"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: venue_booking
-      DB_USER: venue_user
-      DB_PASSWORD: venue_password
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       mysql:
         condition: service_healthy
@@ -93,14 +120,20 @@ services:
       dockerfile: deploy/docker/Dockerfile.booking
     container_name: venue-booking-service
     restart: unless-stopped
-    ports:
-      - "8083:8083"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: venue_booking
-      DB_USER: venue_user
-      DB_PASSWORD: venue_password
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      PAYMENT_SERVICE_URL: http://payment-service:8084
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       mysql:
         condition: service_healthy
@@ -111,14 +144,23 @@ services:
       dockerfile: deploy/docker/Dockerfile.payment
     container_name: venue-payment-service
     restart: unless-stopped
-    ports:
-      - "8084:8084"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: venue_booking
-      DB_USER: venue_user
-      DB_PASSWORD: venue_password
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      BOOKING_SERVICE_URL: http://booking-service:8083
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       mysql:
         condition: service_healthy
@@ -132,7 +174,8 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
 
 volumes:
   mysql_data:

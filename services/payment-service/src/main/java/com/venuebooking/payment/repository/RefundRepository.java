@@ -12,4 +12,6 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
     List<Refund> findByBookingId(Long bookingId);
 
     List<Refund> findByTenantId(Long tenantId);
+
+    java.util.Optional<Refund> findByGatewayRefundId(String gatewayRefundId);
 }

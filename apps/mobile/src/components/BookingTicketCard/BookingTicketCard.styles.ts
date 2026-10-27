@@ -1,0 +1,147 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#0f172a',
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+  },
+  topSection: {
+    padding: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  venueName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  statusBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  venueAddress: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 14,
+  },
+  resourceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  resourceName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#818cf8',
+  },
+  sportBadge: {
+    fontSize: 11,
+    color: '#94a3b8',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
+  },
+  infoValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 2,
+  },
+  perforatedLine: {
+    height: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  cutoutLeft: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#090d16',
+    marginLeft: -10,
+  },
+  cutoutRight: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#090d16',
+    marginRight: -10,
+  },
+  dashLine: {
+    flex: 1,
+    height: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderStyle: 'dashed',
+  },
+  bottomSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  qrBox: {
+    width: 90,
+    height: 90,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+  },
+  qrCodeText: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  ticketId: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  qrInstructions: {
+    fontSize: 12,
+    color: '#94a3b8',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  cancelBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  cancelBtnText: {
+    color: '#f43f5e',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});

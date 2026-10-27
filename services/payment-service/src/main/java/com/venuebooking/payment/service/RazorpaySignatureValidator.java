@@ -47,4 +47,19 @@ public class RazorpaySignatureValidator {
             return false;
         }
     }
+
+    public boolean isCheckoutValid(String orderId, String paymentId, String signature, String secret) {
+        if (orderId == null || paymentId == null || signature == null || secret == null) return false;
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
+            byte[] digest = mac.doFinal((orderId + "|" + paymentId).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            return MessageDigest.isEqual(hex.toString().getBytes(StandardCharsets.UTF_8), signature.trim().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("Could not validate Razorpay checkout signature", e);
+            return false;
+        }
+    }
 }

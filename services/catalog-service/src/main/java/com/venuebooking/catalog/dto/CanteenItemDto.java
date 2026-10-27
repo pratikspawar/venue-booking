@@ -23,6 +23,9 @@ public class CanteenItemDto {
     private Integer stockCount;
     private Integer lowStockThreshold;
     private Boolean isEquipment;
+    private String conditionStatus;
+    private Long depositPaise;
+    private String serialNumber;
     private Boolean isLowStock;
     private Boolean active;
     private Instant createdAt;

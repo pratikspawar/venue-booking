@@ -1,0 +1,125 @@
+services:
+  # 1. Test Database (MySQL 8)
+  mysql-test:
+    image: mysql:8.0
+    container_name: venue-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: root_test_password
+      MYSQL_DATABASE: venue_booking_test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    volumes:
+      - ../../services/common-library/src/main/resources/db/migration:/docker-entrypoint-initdb.d/migrations:ro
+      - ./seed-test-data.sql:/docker-entrypoint-initdb.d/z_seed.sql:ro
+    ports:
+      - "3307:3306"
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --explicit_defaults_for_timestamp=1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "test_user", "-ptest_password"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # 2. API Gateway (Port 8080)
+  api-gateway-test:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.gateway
+    container_name: venue-gateway-test
+    environment:
+      AUTH_SERVICE_HOST: auth-service-test
+      AUTH_SERVICE_PORT: 8081
+      CATALOG_SERVICE_HOST: catalog-service-test
+      CATALOG_SERVICE_PORT: 8082
+      BOOKING_SERVICE_HOST: booking-service-test
+      BOOKING_SERVICE_PORT: 8083
+      PAYMENT_SERVICE_HOST: payment-service-test
+      PAYMENT_SERVICE_PORT: 8084
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  # 3. Auth Service (Port 8081)
+  auth-service-test:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.auth
+    container_name: venue-auth-test
+    environment:
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_NAME: venue_booking_test
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      SMS_PROVIDER: disabled
+      OTP_HASH_PEPPER: test-pepper-secret-token
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  # 4. Catalog Service (Port 8082)
+  catalog-service-test:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.catalog
+    container_name: venue-catalog-test
+    environment:
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_NAME: venue_booking_test
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  # 5. Booking Service (Port 8083)
+  booking-service-test:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.booking
+    container_name: venue-booking-test
+    environment:
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_NAME: venue_booking_test
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      INTERNAL_SERVICE_TOKEN: test-internal-cluster-token-xyz
+      PAYMENT_SERVICE_URL: http://payment-service-test:8084
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  # 6. Payment Service (Port 8084)
+  payment-service-test:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.payment
+    container_name: venue-payment-test
+    environment:
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_NAME: venue_booking_test
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+      RAZORPAY_KEY_ID: rzp_test_dummy_key_123
+      RAZORPAY_KEY_SECRET: rzp_test_dummy_secret_456
+      RAZORPAY_WEBHOOK_SECRET: test_webhook_hmac_secret_789
+      BOOKING_SERVICE_URL: http://booking-service-test:8083
+      INTERNAL_SERVICE_TOKEN: test-internal-cluster-token-xyz
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+networks:
+  default:
+    name: venue-test-net

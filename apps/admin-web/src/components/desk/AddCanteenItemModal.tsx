@@ -204,9 +204,38 @@ export const AddCanteenItemModal: React.FC = () => {
                     )}
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#fff', marginTop: '6px' }}>{item.name}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'capitalize' }}>
-                    {item.category.toLowerCase().replace('_', ' ')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'capitalize' }}>
+                      {item.category.toLowerCase().replace('_', ' ')}
+                    </span>
+                    {item.isEquipment && item.conditionStatus && (
+                      <span
+                        style={{
+                          fontSize: '0.66rem',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          backgroundColor:
+                            item.conditionStatus === 'EXCELLENT'
+                              ? 'rgba(16, 185, 129, 0.2)'
+                              : item.conditionStatus === 'GOOD'
+                              ? 'rgba(16, 185, 129, 0.15)'
+                              : 'rgba(245, 158, 11, 0.15)',
+                          color:
+                            item.conditionStatus === 'EXCELLENT' || item.conditionStatus === 'GOOD'
+                              ? '#34d399'
+                              : '#fbbf24',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {item.conditionStatus}
+                      </span>
+                    )}
                   </div>
+                  {item.isEquipment && item.depositPaise && item.depositPaise > 0 && (
+                    <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginTop: '3px' }}>
+                      +₹{Math.round(item.depositPaise / 100)} Deposit
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>

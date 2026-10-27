@@ -1,4 +1,4 @@
-import { Clock, Play, Square, UtensilsCrossed } from 'lucide-react';
+import { Clock, Play, Square, UtensilsCrossed, ArrowRightLeft } from 'lucide-react';
 import { ResourceSession } from '../../types';
 import { useVenueStore } from '../../store/useVenueStore';
 
@@ -7,7 +7,15 @@ interface SessionTimerCardProps {
 }
 
 export const SessionTimerCard = ({ session }: SessionTimerCardProps) => {
-  const { calculateElapsedMinutes, calculateCurrentBill, startSession, openSettlementModal, openCanteenModal } = useVenueStore();
+  const {
+    calculateElapsedMinutes,
+    calculateCurrentBill,
+    startSession,
+    openSettlementModal,
+    openCanteenModal,
+    openExtendModal,
+    openSwapModal,
+  } = useVenueStore();
 
   const elapsedMins = calculateElapsedMinutes(session.startedAt);
   const currentBill = calculateCurrentBill(session);
@@ -233,6 +241,24 @@ export const SessionTimerCard = ({ session }: SessionTimerCardProps) => {
       <div>
         {session.status === 'IN_PROGRESS' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', gap: '6px', padding: '8px 10px', fontSize: '0.8rem' }}
+                onClick={() => openExtendModal(session)}
+              >
+                <Clock size={14} />
+                <span>+ Extend (+30m)</span>
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', gap: '6px', padding: '8px 10px', fontSize: '0.8rem' }}
+                onClick={() => openSwapModal(session)}
+              >
+                <ArrowRightLeft size={14} />
+                <span>Swap Table</span>
+              </button>
+            </div>
             <button
               className="btn btn-secondary"
               style={{ width: '100%', gap: '8px', padding: '8px 12px', fontSize: '0.85rem' }}

@@ -1,9 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { useCustomerStore } from '../store/useCustomerStore';
+import { useTranslation } from '../locales';
+import { MembershipCard } from '../components/MembershipCard';
 
 export const ProfileScreen: React.FC = () => {
-  const { user, language, setLanguage, openAuth, logoutUser } = useCustomerStore();
+  const {
+    user,
+    language,
+    setLanguage,
+    openAuth,
+    logoutUser,
+    openWalletModal,
+    customerPrepaidPackages,
+    prepaidPackages,
+    buyPrepaidPackage,
+    fetchPrepaidPackages,
+  } = useCustomerStore();
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    fetchPrepaidPackages();
+  }, [fetchPrepaidPackages]);
 
   const languages: { code: 'en' | 'mr' | 'hi'; label: string; script: string }[] = [
     { code: 'en', label: 'English', script: 'English' },
@@ -14,7 +32,7 @@ export const ProfileScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>Account & Preferences</Text>
+        <Text style={styles.title}>{t('profile_title')}</Text>
       </View>
 
       {/* User Card */}
@@ -26,41 +44,87 @@ export const ProfileScreen: React.FC = () => {
           <View style={{ flex: 1 }}>
             <Text style={styles.userName}>{user.name}</Text>
             <Text style={styles.userPhone}>{user.phone}</Text>
-            <Text style={styles.userBadge}>Verified Customer</Text>
+            <Text style={styles.userBadge}>{t('profile_verified')}</Text>
           </View>
         </View>
       ) : (
         <View style={styles.guestCard}>
-          <Text style={styles.guestTitle}>Guest Mode</Text>
-          <Text style={styles.guestSub}>Sign in to save your booking tickets and access wallet perks.</Text>
+          <Text style={styles.guestTitle}>{t('profile_guest')}</Text>
+          <Text style={styles.guestSub}>{t('profile_guest_sub')}</Text>
           <TouchableOpacity style={styles.loginBtn} onPress={openAuth}>
-            <Text style={styles.loginBtnText}>Sign In with Phone OTP</Text>
+            <Text style={styles.loginBtnText}>{t('profile_signin_otp')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Wallet Balance Card */}
-      <View style={styles.walletCard}>
+      <TouchableOpacity
+        style={styles.walletCard}
+        onPress={() => {
+          if (!user) openAuth();
+          else openWalletModal();
+        }}
+        activeOpacity={0.85}
+      >
         <View style={styles.walletHeader}>
           <Text style={styles.walletIcon}>💳</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.walletLabel}>Apex Lounge Wallet</Text>
+            <Text style={styles.walletLabel}>{t('profile_wallet_title')}</Text>
             <Text style={styles.walletAmount}>
-              ₹{user ? user.walletBalancePaise / 100 : 0}
+              ₹{user ? (user.walletBalancePaise / 100).toFixed(0) : 0}
             </Text>
           </View>
-          <TouchableOpacity style={styles.topupBtn}>
-            <Text style={styles.topupBtnText}>+ Add Money</Text>
+          <TouchableOpacity
+            style={styles.topupBtn}
+            onPress={() => {
+              if (!user) openAuth();
+              else openWalletModal();
+            }}
+          >
+            <Text style={styles.topupBtnText}>{t('profile_add_money')}</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.walletNote}>
-          Use wallet balance for instant one-click booking holds and counter canteen snacks.
+          {t('profile_wallet_note')}
         </Text>
+      </TouchableOpacity>
+
+      {/* Membership VIP Pass Card */}
+      <MembershipCard />
+
+      {/* Prepaid Game Hours Packages Card (Task 2.3) */}
+      <View style={styles.prepaidCard}>
+        <View style={styles.prepaidHeader}>
+          <Text style={styles.prepaidIcon}>⏱️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.prepaidTitle}>Prepaid Game Hours Pass</Text>
+            <Text style={styles.prepaidSub}>
+              {customerPrepaidPackages.length > 0
+                ? `${customerPrepaidPackages[0].packageName} • ${customerPrepaidPackages[0].remainingHours.toFixed(1)}h remaining (${customerPrepaidPackages[0].remainingMinutes}m)`
+                : 'Save up to 30% with bulk hour bundles. Automatically deducted at slot checkout.'}
+            </Text>
+          </View>
+          {customerPrepaidPackages.length > 0 ? (
+            <View style={styles.activePrepaidBadge}>
+              <Text style={styles.activePrepaidBadgeText}>{customerPrepaidPackages[0].remainingHours.toFixed(0)}H LEFT</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.buyPackageBtn}
+              onPress={() => {
+                if (!user) openAuth();
+                else if (prepaidPackages.length > 0) buyPrepaidPackage(prepaidPackages[0].id);
+              }}
+            >
+              <Text style={styles.buyPackageBtnText}>Buy Bundle</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Language Selector */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Language / भाषा निवडा</Text>
+        <Text style={styles.sectionTitle}>{t('profile_language_title')}</Text>
         <View style={styles.langRow}>
           {languages.map((l) => (
             <TouchableOpacity
@@ -80,22 +144,22 @@ export const ProfileScreen: React.FC = () => {
       {/* Help & Policies */}
       <View style={styles.menuSection}>
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuText}>Cancellation & Refund Policy</Text>
+          <Text style={styles.menuText}>{t('profile_cancellation_policy')}</Text>
           <Text style={styles.menuChevron}>›</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuText}>Venue Rules & PlayStation Guidelines</Text>
+          <Text style={styles.menuText}>{t('profile_rules_guidelines')}</Text>
           <Text style={styles.menuChevron}>›</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuText}>Contact Desk Support</Text>
+          <Text style={styles.menuText}>{t('profile_contact_support')}</Text>
           <Text style={styles.menuChevron}>›</Text>
         </TouchableOpacity>
       </View>
 
       {user && (
         <TouchableOpacity style={styles.logoutBtn} onPress={logoutUser}>
-          <Text style={styles.logoutBtnText}>Log Out</Text>
+          <Text style={styles.logoutBtnText}>{t('profile_logout')}</Text>
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -230,6 +294,110 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#cbd5e1',
     lineHeight: 16,
+  },
+  membershipCard: {
+    backgroundColor: 'rgba(234, 179, 8, 0.08)',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.25)',
+  },
+  membershipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  membershipIcon: {
+    fontSize: 26,
+  },
+  membershipTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#fef08a',
+  },
+  membershipSub: {
+    fontSize: 11,
+    color: '#cbd5e1',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  activeBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#34d399',
+  },
+  activeBadgeText: {
+    color: '#34d399',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  upgradeBtn: {
+    backgroundColor: '#eab308',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  upgradeBtnText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  prepaidCard: {
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.25)',
+  },
+  prepaidHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  prepaidIcon: {
+    fontSize: 26,
+  },
+  prepaidTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#a5b4fc',
+  },
+  prepaidSub: {
+    fontSize: 11,
+    color: '#cbd5e1',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  activePrepaidBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#818cf8',
+  },
+  activePrepaidBadgeText: {
+    color: '#818cf8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  buyPackageBtn: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  buyPackageBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   section: {
     marginBottom: 24,

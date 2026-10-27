@@ -1,14 +1,23 @@
-import { VenueItem, ResourceItem, SlotCell, BookingTicket, SportItem } from '../types';
+import { VenueItem, ResourceItem, SlotCell, BookingTicket, SportItem, PrepaidPackageDto, CustomerPrepaidPackageDto, CouponValidationResult } from '../types';
 
 // In Android Emulator localhost is 10.0.2.2; on physical device or web use machine IP or 127.0.0.1
 const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 class MobileApiService {
   private token: string | null = null;
+  private refreshTokenVal: string | null = null;
   private tenantId: number = 1;
+  private refreshPromise: Promise<string | null> | null = null;
 
   setToken(token: string | null) {
     this.token = token;
+  }
+
+  setTokens(accessToken: string | null, refreshToken: string | null = null) {
+    this.token = accessToken;
+    if (refreshToken) {
+      this.refreshTokenVal = refreshToken;
+    }
   }
 
   setTenantId(id: number) {
@@ -27,195 +36,335 @@ class MobileApiService {
     return headers;
   }
 
-  // --- Auth ---
-  async requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/otp/request`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ phone }),
-      });
-      return res.json();
-    } catch {
-      return { success: true, message: 'OTP sent to ' + phone };
+  // --- Auto-Refresh Interceptor ---
+  async refreshSession(): Promise<string | null> {
+    if (!this.refreshTokenVal) {
+      this.setTokens(null, null);
+      return null;
+    }
+
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/token/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            refreshToken: this.refreshTokenVal,
+            requestedTenantId: this.tenantId,
+          }),
+        });
+
+        if (!res.ok) {
+          this.setTokens(null, null);
+          return null;
+        }
+
+        const data = await res.json();
+        if (data.accessToken) {
+          this.setTokens(data.accessToken, data.refreshToken);
+          return data.accessToken;
+        }
+      } catch {
+        this.setTokens(null, null);
+      } finally {
+        this.refreshPromise = null;
+      }
+      return null;
+    })();
+
+    return this.refreshPromise;
+  }
+
+  async logout(): Promise<void> {
+    const rf = this.refreshTokenVal;
+    const at = this.token;
+    this.setTokens(null, null);
+    if (rf || at) {
+      try {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(at ? { Authorization: `Bearer ${at}` } : {}),
+          },
+          body: JSON.stringify({ refreshToken: rf }),
+        });
+      } catch (e) {
+        console.warn('Logout notification error:', e);
+      }
     }
   }
 
-  async verifyOtp(phone: string, otp: string): Promise<{ accessToken: string; user: any }> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ phone, otp }),
-      });
-      const data = await res.json();
-      if (data.accessToken) {
-        this.setToken(data.accessToken);
+  async request(url: string, init: RequestInit = {}): Promise<Response> {
+    const headers = {
+      ...this.getHeaders(),
+      ...((init.headers as Record<string, string>) || {}),
+    };
+
+    let res = await fetch(url, { ...init, headers });
+
+    // Auto-refresh token and retry on 401
+    if (res.status === 401 && this.refreshTokenVal) {
+      const newToken = await this.refreshSession();
+      if (newToken) {
+        const retryHeaders = {
+          ...this.getHeaders(),
+          ...((init.headers as Record<string, string>) || {}),
+          Authorization: `Bearer ${newToken}`,
+        };
+        res = await fetch(url, { ...init, headers: retryHeaders });
       }
-      return data;
-    } catch {
-      // Fallback demo token
-      const mockToken = 'mock_jwt_customer_' + Date.now();
-      this.setToken(mockToken);
-      return {
-        accessToken: mockToken,
-        user: { id: 101, phone, name: 'Siddharth R.', language: 'en' },
-      };
     }
+
+    return res;
+  }
+
+  // --- Auth ---
+  async requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/auth/otp/request`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not send an OTP');
+    return data;
+  }
+
+  async verifyOtp(phone: string, otp: string): Promise<{ accessToken: string; refreshToken?: string; user: any }> {
+    const res = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ phone, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'OTP verification failed');
+    if (!data.accessToken) throw new Error('The server did not return an access token');
+    this.setTokens(data.accessToken, data.refreshToken);
+    return data;
   }
 
   // --- Sports ---
   async fetchSports(): Promise<SportItem[]> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/sports`, { headers: this.getHeaders() });
-      if (!res.ok) throw new Error('Failed to fetch sports');
-      return res.json();
-    } catch {
-      return [
-        { id: 1, code: 'PLAYSTATION', nameEn: 'PlayStation 5', icon: '🎮' },
-        { id: 2, code: 'POOL', nameEn: 'Snooker & Pool', icon: '🎱' },
-        { id: 3, code: 'TURF', nameEn: 'Box Turf Football', icon: '⚽' },
-        { id: 4, code: 'CARROM', nameEn: 'Carrom Lounge', icon: '🎯' },
-        { id: 5, code: 'BADMINTON', nameEn: 'Badminton Court', icon: '🏸' },
-        { id: 6, code: 'PICKLEBALL', nameEn: 'Pickleball', icon: '🏓' },
-        { id: 7, code: 'VR_GAMING', nameEn: 'VR Gaming Pods', icon: '🥽' },
-      ];
-    }
+    const res = await this.request(`${API_BASE_URL}/sports`);
+    if (!res.ok) throw new Error('Failed to fetch sports from the server');
+    return res.json();
   }
 
   // --- Venues ---
   async fetchVenues(sport?: string): Promise<VenueItem[]> {
-    try {
-      const url = sport && sport !== 'ALL'
-        ? `${API_BASE_URL}/venues?sport=${sport}`
-        : `${API_BASE_URL}/venues`;
-      const res = await fetch(url, { headers: this.getHeaders() });
-      if (!res.ok) throw new Error('API request failed');
-      return res.json();
-    } catch {
-      // Return rich seed data
-      return [
-        {
-          id: 1,
-          tenantId: 1,
-          name: 'Apex Gaming & Snooker Lounge',
-          address: 'Bandra West, Mumbai (Near Linking Road)',
-          city: 'Mumbai',
-          distanceKm: 0.8,
-          rating: 4.9,
-          reviewCount: 342,
-          sports: ['PLAYSTATION', 'POOL', 'CARROM'],
-          startingPricePaise: 25000,
-          payAtVenueAllowed: true,
-          openTime: '10:00 AM',
-          closeTime: '01:00 AM',
-          active: true,
-        },
-        {
-          id: 2,
-          tenantId: 1,
-          name: 'Urban Box Turf & PS5 Arena',
-          address: 'Andheri East, Metro Station Gate 2',
-          city: 'Mumbai',
-          distanceKm: 2.4,
-          rating: 4.8,
-          reviewCount: 215,
-          sports: ['TURF', 'PLAYSTATION'],
-          startingPricePaise: 120000,
-          payAtVenueAllowed: true,
-          openTime: '06:00 AM',
-          closeTime: '12:00 AM',
-          active: true,
-        },
-        {
-          id: 3,
-          tenantId: 2,
-          name: 'Cue Masters Billiards & Snooker',
-          address: 'FC Road, Shivaji Nagar, Pune',
-          city: 'Pune',
-          distanceKm: 3.1,
-          rating: 4.7,
-          reviewCount: 180,
-          sports: ['POOL', 'CARROM'],
-          startingPricePaise: 20000,
-          payAtVenueAllowed: false,
-          openTime: '11:00 AM',
-          closeTime: '11:30 PM',
-          active: true,
-        },
-      ];
-    }
+    const url = sport && sport !== 'ALL'
+      ? `${API_BASE_URL}/venues?sport=${encodeURIComponent(sport)}`
+      : `${API_BASE_URL}/venues`;
+    const res = await this.request(url);
+    if (!res.ok) throw new Error('Failed to fetch venues from the server');
+    const rows = await res.json();
+    return rows.map((venue: any) => ({
+      ...venue,
+      sports: venue.sports ?? [],
+      payAtVenueAllowed: venue.payAtVenueMode === 'NO_ADVANCE',
+      openTime: venue.operatingHours?.[0]?.openTime ?? '',
+      closeTime: venue.operatingHours?.[0]?.closeTime ?? '',
+    } as VenueItem));
   }
 
   // --- Resources ---
   async fetchResources(venueId: number): Promise<ResourceItem[]> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/venues/${venueId}/resources`, {
-        headers: this.getHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to fetch resources');
-      return res.json();
-    } catch {
-      if (venueId === 1) {
-        return [
-          { id: 1, venueId: 1, name: 'PlayStation 5 Console #1 (4K OLED)', sport: 'PLAYSTATION', slotMinutes: 60, ratePerHourPaise: 25000, status: 'ACTIVE' },
-          { id: 2, venueId: 1, name: 'PlayStation 5 Console #2 (DualSense)', sport: 'PLAYSTATION', slotMinutes: 60, ratePerHourPaise: 25000, status: 'ACTIVE' },
-          { id: 3, venueId: 1, name: 'Tournament Pool Table A (8-Ball)', sport: 'POOL', slotMinutes: 60, ratePerHourPaise: 30000, status: 'ACTIVE' },
-          { id: 4, venueId: 1, name: 'Carrom Suite Pro #1', sport: 'CARROM', slotMinutes: 60, ratePerHourPaise: 12000, status: 'ACTIVE' },
-        ];
-      }
-      return [
-        { id: 5, venueId: 2, name: 'FIFA Standard 5-A-Side Turf', sport: 'TURF', slotMinutes: 60, ratePerHourPaise: 120000, status: 'ACTIVE' },
-        { id: 6, venueId: 2, name: 'PlayStation 5 VIP Lounge (Surround)', sport: 'PLAYSTATION', slotMinutes: 60, ratePerHourPaise: 35000, status: 'ACTIVE' },
-      ];
-    }
+    const res = await this.request(`${API_BASE_URL}/venues/${venueId}/resources`);
+    if (!res.ok) throw new Error('Failed to fetch resources from the server');
+    const rows = await res.json();
+    return rows.map((resource: any) => ({
+      ...resource,
+      sport: resource.sportCode,
+      ratePerHourPaise: resource.pricingRules?.[0]?.pricePerHourPaise ?? resource.pricingRules?.[0]?.pricePerSlotPaise ?? 0,
+    } as ResourceItem));
   }
 
   // --- Slot Availability ---
   async fetchAvailability(resourceId: number, dateStr: string): Promise<SlotCell[]> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/resources/${resourceId}/availability?date=${dateStr}`, {
-        headers: this.getHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to fetch availability');
-      return res.json();
-    } catch {
-      // Dynamic slots generation for today
-      return [
-        { startUtc: '10:00', label: '10:00 AM', pricePaise: 25000, status: 'BOOKED' },
-        { startUtc: '11:00', label: '11:00 AM', pricePaise: 25000, status: 'BOOKED' },
-        { startUtc: '12:00', label: '12:00 PM', pricePaise: 25000, status: 'HELD' },
-        { startUtc: '13:00', label: '01:00 PM', pricePaise: 25000, status: 'AVAILABLE' },
-        { startUtc: '14:00', label: '02:00 PM', pricePaise: 25000, status: 'AVAILABLE' },
-        { startUtc: '15:00', label: '03:00 PM', pricePaise: 25000, status: 'AVAILABLE' },
-        { startUtc: '16:00', label: '04:00 PM', pricePaise: 25000, status: 'AVAILABLE' },
-        { startUtc: '17:00', label: '05:00 PM', pricePaise: 30000, status: 'AVAILABLE' }, // Peak hour
-        { startUtc: '18:00', label: '06:00 PM', pricePaise: 30000, status: 'AVAILABLE' },
-        { startUtc: '19:00', label: '07:00 PM', pricePaise: 30000, status: 'AVAILABLE' },
-        { startUtc: '20:00', label: '08:00 PM', pricePaise: 30000, status: 'AVAILABLE' },
-        { startUtc: '21:00', label: '09:00 PM', pricePaise: 30000, status: 'AVAILABLE' },
-        { startUtc: '22:00', label: '10:00 PM', pricePaise: 25000, status: 'AVAILABLE' },
-      ];
-    }
+    const res = await this.request(`${API_BASE_URL}/resources/${resourceId}/availability?date=${dateStr}`);
+    if (!res.ok) throw new Error('Failed to fetch slot availability');
+    const data = await res.json();
+    return (data.slots ?? []).map((slot: any) => ({
+      startUtc: slot.slotStart,
+      endUtc: slot.slotEnd,
+      label: new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: data.venueTimezone }).format(new Date(slot.slotStart)),
+      pricePaise: slot.pricePaise ?? 0,
+      status: slot.status === 'BLOCKED' ? 'MAINTENANCE' : slot.status,
+    }));
   }
 
   // --- Create Booking Hold ---
-  async createBooking(payload: any): Promise<any> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/bookings`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-      });
-      return res.json();
-    } catch {
-      return {
-        id: Math.floor(1000 + Math.random() * 9000),
-        status: payload.paymentMode === 'PAY_AT_VENUE' ? 'CONFIRMED' : 'HELD',
-        amountPaise: 25000,
-        holdExpiresAt: new Date(Date.now() + 8 * 60 * 1000).toISOString(),
-      };
+  async createBooking(payload: { resourceId: number; startUtc: string; endUtc: string; paymentMode: 'ONLINE' | 'PAY_AT_VENUE'; couponCode?: string }): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/bookings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Unable to hold the selected slot');
+    return data;
+  }
+
+  async choosePayAtVenue(bookingId: number): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/bookings/${bookingId}/pay-at-venue`, {
+      method: 'POST',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Pay at venue could not be selected');
+    return data;
+  }
+
+  async createPaymentOrder(bookingId: number): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/payments/order`, {
+      method: 'POST',
+      body: JSON.stringify({ bookingId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not start payment');
+    return data;
+  }
+
+  async verifyPayment(orderId: string, paymentId: string, signature: string): Promise<void> {
+    const res = await this.request(`${API_BASE_URL}/payments/verify-checkout`, {
+      method: 'POST',
+      body: JSON.stringify({ orderId, paymentId, signature }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.message || 'Payment verification failed');
     }
+  }
+
+  async fetchMyBookings(): Promise<BookingTicket[]> {
+    const res = await this.request(`${API_BASE_URL}/me/bookings`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not load your bookings');
+    return data.map((booking: any) => {
+      const start = new Date(booking.startUtc);
+      const end = new Date(booking.endUtc);
+      return {
+        bookingId: String(booking.id),
+        venueName: booking.venueName ?? 'Venue',
+        venueAddress: '',
+        resourceName: booking.resourceName ?? 'Resource',
+        sport: '',
+        dateLabel: start.toLocaleDateString(),
+        timeWindow: `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        status: booking.status,
+        amountPaise: booking.amountPaise,
+        paymentMode: booking.paymentMode,
+        qrData: '',
+        canCancel: ['HELD', 'CONFIRMED'].includes(booking.status),
+        holdExpiresAt: booking.holdExpiresAt,
+      } as BookingTicket;
+    });
+  }
+
+  async fetchBooking(bookingId: number): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/bookings/${bookingId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not refresh booking status');
+    return data;
+  }
+
+  async cancelBooking(bookingId: number): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not cancel the booking');
+    return data;
+  }
+
+  // --- Wallet & Top-up ---
+  async fetchWallet(userId: number): Promise<{ walletId: number; userId: number; balancePaise: number; balanceRupees: number }> {
+    const res = await this.request(`${API_BASE_URL}/wallets/customer/${userId}`);
+    if (!res.ok) throw new Error('Failed to fetch wallet');
+    return res.json();
+  }
+
+  async fetchWalletTransactions(userId: number): Promise<any[]> {
+    const res = await this.request(`${API_BASE_URL}/wallets/customer/${userId}/transactions`);
+    if (!res.ok) throw new Error('Failed to fetch wallet transactions');
+    return res.json();
+  }
+
+  async createWalletTopupOrder(amountPaise: number): Promise<{
+    orderId: string;
+    amountPaise: number;
+    currency: string;
+    keyId: string;
+    purpose?: string;
+  }> {
+    const res = await this.request(`${API_BASE_URL}/payments/wallet-topup-order`, {
+      method: 'POST',
+      body: JSON.stringify({ amountPaise }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Could not initiate wallet top-up');
+    return data;
+  }
+
+  // --- Memberships & Passes ---
+  async fetchMembershipPlans(): Promise<any[]> {
+    const res = await this.request(`${API_BASE_URL}/memberships/plans`);
+    if (!res.ok) throw new Error('Failed to load membership plans');
+    return res.json();
+  }
+
+  async fetchActiveMembership(userId: number): Promise<any | null> {
+    const res = await this.request(`${API_BASE_URL}/memberships/customer/${userId}/active`);
+    if (res.status === 204) return null;
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  async purchaseMembership(planId: number, paymentMode: 'WALLET' | 'ONLINE' = 'WALLET'): Promise<any> {
+    const res = await this.request(`${API_BASE_URL}/memberships/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ planId, paymentMode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to purchase membership');
+    return data;
+  }
+
+  // --- Coupons & Promotions (Task 2.3) ---
+  async validateCoupon(code: string, bookingAmountPaise: number, sportCode?: string): Promise<CouponValidationResult> {
+    const res = await this.request(`${API_BASE_URL}/coupons/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ code, bookingAmountPaise, sportCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Coupon validation failed');
+    return data;
+  }
+
+  // --- Prepaid Game Hours Packages (Task 2.3) ---
+  async fetchPrepaidPackages(): Promise<PrepaidPackageDto[]> {
+    const res = await this.request(`${API_BASE_URL}/prepaid-packages`);
+    if (!res.ok) throw new Error('Failed to load prepaid packages');
+    return res.json();
+  }
+
+  async fetchCustomerPrepaidPackages(userId: number): Promise<CustomerPrepaidPackageDto[]> {
+    const res = await this.request(`${API_BASE_URL}/prepaid-packages/customer/${userId}/active`);
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  async purchasePrepaidPackage(packageId: number, paymentMode: 'WALLET' | 'ONLINE' = 'WALLET'): Promise<CustomerPrepaidPackageDto> {
+    const res = await this.request(`${API_BASE_URL}/prepaid-packages/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ packageId, paymentMode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to purchase prepaid package');
+    return data;
   }
 }
 

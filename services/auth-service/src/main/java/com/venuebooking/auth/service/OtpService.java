@@ -3,8 +3,10 @@ package com.venuebooking.auth.service;
 import com.venuebooking.auth.dto.AuthResponseDto;
 import com.venuebooking.auth.dto.UserProfileDto;
 import com.venuebooking.auth.entity.OtpRequest;
+import com.venuebooking.auth.entity.SmsDeliveryLog;
 import com.venuebooking.auth.entity.User;
 import com.venuebooking.auth.repository.OtpRequestRepository;
+import com.venuebooking.auth.repository.SmsDeliveryLogRepository;
 import com.venuebooking.auth.repository.UserRepository;
 import com.venuebooking.common.BusinessException;
 import com.venuebooking.tenant.entity.TenantMember;
@@ -12,6 +14,7 @@ import com.venuebooking.tenant.repository.TenantMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +39,19 @@ public class OtpService {
     private static final int MAX_VERIFICATION_ATTEMPTS = 5;
 
     private final OtpRequestRepository otpRequestRepository;
+    private final SmsDeliveryLogRepository smsDeliveryLogRepository;
     private final UserRepository userRepository;
     private final TenantMemberRepository tenantMemberRepository;
     private final SmsService smsService;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
     private final SecureRandom secureRandom = new SecureRandom();
+
+    @Value("${app.sms.provider:disabled}")
+    private String smsProvider;
+
+    @Value("${app.auth.otp-hash-pepper}")
+    private String otpHashPepper;
 
     @Transactional
     public void requestOtp(String phone) {
@@ -58,8 +69,7 @@ public class OtpService {
             );
         }
 
-        // Generate 6 digit OTP (static 123456 for test dev phone numbers)
-        String otp = isTestPhoneNumber(normalizedPhone) ? "123456" : String.format("%06d", secureRandom.nextInt(1000000));
+        String otp = String.format("%06d", secureRandom.nextInt(1000000));
         String otpHash = hashOtp(normalizedPhone, otp);
 
         OtpRequest request = OtpRequest.builder()
@@ -71,8 +81,18 @@ public class OtpService {
                 .build();
 
         otpRequestRepository.save(request);
-        smsService.sendOtp(normalizedPhone, otp);
-        log.info("OTP generated and sent to phone: {}", normalizedPhone);
+        String messageId = smsService.sendOtp(normalizedPhone, otp);
+
+        smsDeliveryLogRepository.save(SmsDeliveryLog.builder()
+                .phone(normalizedPhone)
+                .provider(smsProvider)
+                .messageId(messageId)
+                .purpose("OTP")
+                .status("DISPATCHED")
+                .build());
+
+        log.info("OTP sent to a phone ending in {} (messageId: {})",
+                normalizedPhone.substring(Math.max(0, normalizedPhone.length() - 4)), messageId);
     }
 
     @Transactional
@@ -92,7 +112,7 @@ public class OtpService {
         }
 
         String expectedHash = hashOtp(normalizedPhone, otp);
-        if (!expectedHash.equals(otpRequest.getOtpHash())) {
+        if (!MessageDigest.isEqual(expectedHash.getBytes(StandardCharsets.UTF_8), otpRequest.getOtpHash().getBytes(StandardCharsets.UTF_8))) {
             otpRequest.setAttempts(otpRequest.getAttempts() + 1);
             otpRequestRepository.save(otpRequest);
             int remaining = MAX_VERIFICATION_ATTEMPTS - otpRequest.getAttempts();
@@ -133,7 +153,9 @@ public class OtpService {
         }
 
         String accessToken = jwtService.generateAccessToken(user, activeTenantId, activeRole);
-        String refreshToken = jwtService.generateRefreshToken(user);
+        String familyId = java.util.UUID.randomUUID().toString();
+        String refreshToken = jwtService.generateRefreshToken(user, familyId);
+        refreshTokenService.registerRefreshToken(user.getId(), refreshToken, familyId);
 
         List<UserProfileDto.MembershipDto> membershipDtos = memberships.stream()
                 .map(m -> UserProfileDto.MembershipDto.builder()
@@ -171,14 +193,10 @@ public class OtpService {
         return digits;
     }
 
-    private boolean isTestPhoneNumber(String phone) {
-        return phone.endsWith("9999999999") || phone.endsWith("1111111111") || phone.endsWith("1234567890");
-    }
-
     private String hashOtp(String phone, String otp) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest((phone + ":" + otp + ":venue_salt").getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest((phone + ":" + otp + ":" + otpHashPepper).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);

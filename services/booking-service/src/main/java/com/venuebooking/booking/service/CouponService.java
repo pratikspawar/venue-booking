@@ -5,7 +5,7 @@ import com.venuebooking.booking.dto.CouponValidationResponseDto;
 import com.venuebooking.booking.dto.CreateCouponDto;
 import com.venuebooking.booking.entity.Coupon;
 import com.venuebooking.booking.repository.CouponRepository;
-import com.venuebooking.common.exception.ResourceNotFoundException;
+import com.venuebooking.common.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -143,9 +143,9 @@ public class CouponService {
     @Transactional
     public void deleteCoupon(Long tenantId, Long couponId) {
         Coupon coupon = couponRepository.findById(couponId)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + couponId));
+                .orElseThrow(() -> BusinessException.notFound("Coupon not found: " + couponId));
         if (!coupon.getTenantId().equals(tenantId)) {
-            throw new ResourceNotFoundException("Coupon not found in tenant");
+            throw BusinessException.notFound("Coupon not found in tenant");
         }
         coupon.setActive(false);
         couponRepository.save(coupon);

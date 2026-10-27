@@ -8,12 +8,16 @@ pipeline {
   environment {
     REGISTRY = 'ghcr.io/venue-booking'
     IMAGE_TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(8) : 'latest'}"
-    API_IMAGE = "${REGISTRY}/api:${IMAGE_TAG}"
+    GATEWAY_IMAGE = "${REGISTRY}/gateway:${IMAGE_TAG}"
+    AUTH_IMAGE = "${REGISTRY}/auth:${IMAGE_TAG}"
+    CATALOG_IMAGE = "${REGISTRY}/catalog:${IMAGE_TAG}"
+    BOOKING_IMAGE = "${REGISTRY}/booking:${IMAGE_TAG}"
+    PAYMENT_IMAGE = "${REGISTRY}/payment:${IMAGE_TAG}"
     ADMIN_IMAGE = "${REGISTRY}/admin-web:${IMAGE_TAG}"
   }
 
   options {
-    timeout(time: 30, unit: 'MINUTES')
+    timeout(time: 45, unit: 'MINUTES')
     buildDiscarder(logRotator(numToKeepStr: '20'))
   }
 
@@ -37,36 +41,84 @@ pipeline {
       }
     }
 
-    stage('Backend Test') {
+    stage('Microservices Unit & Integration Tests') {
       steps {
         container('maven') {
-          dir('apps/api') {
-            sh './mvnw -B clean verify'
+          dir('services') {
+            sh 'mvn -B clean verify'
           }
         }
       }
       post {
         always {
-          junit 'apps/api/target/surefire-reports/*.xml'
+          junit 'services/*/target/surefire-reports/*.xml'
         }
       }
     }
 
-    stage('Container Images Build & Scan') {
+    stage('Container Images Build') {
       parallel {
-        stage('Build API Image') {
+        stage('Build Gateway') {
           steps {
             container('kaniko') {
               sh """
-                /kaniko/executor --context dir://${WORKSPACE}/apps/api \
-                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.api \
-                  --destination ${API_IMAGE} \
+                /kaniko/executor --context dir://${WORKSPACE} \
+                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.gateway \
+                  --destination ${GATEWAY_IMAGE} \
                   --no-push=\${BRANCH_NAME != 'main'}
               """
             }
           }
         }
-        stage('Build Admin Web Image') {
+        stage('Build Auth Service') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor --context dir://${WORKSPACE} \
+                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.auth \
+                  --destination ${AUTH_IMAGE} \
+                  --no-push=\${BRANCH_NAME != 'main'}
+              """
+            }
+          }
+        }
+        stage('Build Catalog Service') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor --context dir://${WORKSPACE} \
+                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.catalog \
+                  --destination ${CATALOG_IMAGE} \
+                  --no-push=\${BRANCH_NAME != 'main'}
+              """
+            }
+          }
+        }
+        stage('Build Booking Service') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor --context dir://${WORKSPACE} \
+                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.booking \
+                  --destination ${BOOKING_IMAGE} \
+                  --no-push=\${BRANCH_NAME != 'main'}
+              """
+            }
+          }
+        }
+        stage('Build Payment Service') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor --context dir://${WORKSPACE} \
+                  --dockerfile ${WORKSPACE}/deploy/docker/Dockerfile.payment \
+                  --destination ${PAYMENT_IMAGE} \
+                  --no-push=\${BRANCH_NAME != 'main'}
+              """
+            }
+          }
+        }
+        stage('Build Admin Web') {
           steps {
             container('kaniko') {
               sh """
@@ -81,10 +133,11 @@ pipeline {
       }
     }
 
-    stage('Security Scan (Trivy)') {
+    stage('Security Vulnerability Scan (Trivy)') {
       steps {
         container('trivy') {
-          sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${API_IMAGE}"
+          sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${GATEWAY_IMAGE}"
+          sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${BOOKING_IMAGE}"
         }
       }
     }
@@ -97,32 +150,35 @@ pipeline {
         container('kubectl') {
           withCredentials([file(credentialsId: 'k8s-staging-kubeconfig', variable: 'KUBECONFIG')]) {
             sh '''
-              # Apply Flyway migration job before rolling out new application replica
-              kubectl apply -f deploy/k8s/overlays/staging/flyway-job.yaml
-              kubectl wait --for=condition=complete job/flyway-migration --timeout=180s
+              # Apply Flyway schema migrations before service rollout
+              kubectl apply -f deploy/k8s/base/flyway-job.yaml
+              kubectl wait --for=condition=complete job/flyway-schema-migration --timeout=180s
 
-              # Update deployment image
-              kubectl set image deployment/venue-api api=${API_IMAGE}
-              kubectl rollout status deployment/venue-api --timeout=180s
+              # Roll out microservices via Kustomize
+              kubectl apply -k deploy/k8s/base
+              kubectl rollout status deployment/api-gateway --timeout=180s
+              kubectl rollout status deployment/booking-service --timeout=180s
+              kubectl rollout status deployment/admin-web --timeout=180s
             '''
           }
         }
       }
     }
 
-    stage('Staging Smoke Tests') {
+    stage('Staging E2E & Concurrency Test Suite') {
       when {
         branch 'main'
       }
       steps {
-        sh 'deploy/scripts/smoke-test.sh https://api-staging.venueplatform.com'
+        sh 'chmod +x deploy/scripts/test-e2e-concurrency.sh'
+        sh 'deploy/scripts/test-e2e-concurrency.sh https://api-staging.venueplatform.com/api/v1'
       }
     }
   }
 
   post {
     failure {
-      echo 'Pipeline failed. Sending alert to team webhook...'
+      echo 'Enterprise pipeline failed. Notification sent to DevOps webhook.'
     }
   }
 }

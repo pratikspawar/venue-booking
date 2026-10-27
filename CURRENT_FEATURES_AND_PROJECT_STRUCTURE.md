@@ -94,24 +94,34 @@ Current responsibilities:
 
 Current responsibilities:
 
-- Slot availability lookup.
-- Booking creation and temporary holds.
-- Booking-slot records with a unique slot constraint intended to prevent double booking.
+- Slot availability lookup and on-demand slot grid computation.
+- Booking creation and temporary holds with 10-minute hold expiry.
+- Booking-slot records with unique constraints preventing double booking.
 - Hold-expiry scheduled job.
-- Booking cancellation logic.
+- Booking cancellation and policy refund calculation.
 - Staff desk operations and live play sessions.
-- Wallet, wallet transaction, membership, coupon, booking item, and report domain models/services.
+- **3-Tier Session Extension Engine (`POST /staff/sessions/{id}/extend`):**
+  - *Tier 1 (In-Place Extension):* Validates next slot on current resource; extends without disruption if free.
+  - *Tier 2 (Table/Court Swap):* If current resource is reserved in upcoming slot, identifies available resources of the same sport in the venue and enables one-click player migration.
+  - *Tier 3 (Graceful Hard Stop):* If all tables of that sport are occupied, alerts staff and player with 10m/5m advance wrap-up notices.
+- **Staff Table & Resource Swapping (`POST /staff/sessions/{id}/swap-resource`):** Moves active player and accumulated timer/addons to another table/court.
+- **Merchant QR Scanner Check-in (`POST /staff/checkin/qr`):** Scans customer digital ticket barcodes/QRs, validates booking status, marks arrival, and auto-starts live play timers.
+- **Universal Canteen & Gear Rental Coverage (`POST /staff/bookings/{id}/items`):** Universal billing linking canteen items and gear rentals to any table, console, or court.
+- Wallet, wallet transaction, membership, coupon, booking item, audited earnings intelligence, and report domain models/services.
 
 ### Payment Service (`services/payment-service`)
 
 Current responsibilities:
 
 - Payment order creation.
-- Razorpay webhook endpoint.
-- Razorpay signature validation helper.
-- Payment records.
-- Refund requests and refund records.
-- Webhook event persistence for idempotency.
+- **Multi-Tenant Merchant Gateway BYOK (`tenant_gateway_configs`):**
+  - Secure AES-GCM-256 encryption at rest for merchant `keySecret` and `webhookSecret`.
+  - Self-service endpoints (`GET /payments/settings/gateway`, `PUT`, `POST /test`) allowing venue Owners to bring their own Razorpay credentials.
+  - Dynamic credential resolution in `PaymentService` per `tenantId` with platform fallback.
+  - Tenant-specific webhook callback URLs (`/api/v1/webhooks/razorpay?tenantId={id}`).
+- Razorpay webhook endpoint with cryptographic HMAC-SHA256 signature validation.
+- Payment records and refund handling with server-side paise math.
+- Webhook event persistence for idempotent replay protection.
 
 ### Common Library (`services/common-library`)
 
@@ -137,19 +147,27 @@ Technology:
 
 Current UI modules:
 
-- Main application shell with header and sidebar.
-- Live desk screen for active resources/sessions.
+- Main application shell with header, shift collection tracker, and sidebar navigation.
+- Live desk screen for active resources/sessions with real-time timers.
+- **24-Hour Slot Schedule Matrix & Gantt Timeline (`SlotTimelineMatrix.tsx`):** BookMyShow-style interactive visual grid covering all tables/consoles on the vertical axis and 24 hourly time slots on the horizontal axis with live status badges, click-to-book, and slot inspection.
+- **3-Tier Session Extension & Conflict Modal (`ExtendSessionModal.tsx`):** Seamless +30m/+60m extensions with real-time conflict detection and table swap dispatch.
+- **Table Swap Modal (`SwapResourceModal.tsx`):** One-click player transfer across available venue units.
+- **Merchant QR Scanner Check-in Modal (`QrScannerModal.tsx`):** Camera viewfinder HUD and instant ticket barcode check-in for arriving players.
+- **Operational Audit & History Trail (`ActivityAuditLog.tsx`):** Real-time chronological audit trail of all check-ins, extensions, swaps, settlements, and canteen additions.
 - Walk-in booking modal.
-- Session timer card.
-- Settlement/payment modal.
+- Session timer card with Quick Extend (+30m), Table Swap, Canteen, and Stop & Settle actions.
+- Settlement/payment modal supporting Cash, UPI Counter QR, and Wallet.
 - Shift-summary modal.
-- Canteen item modal.
-- Booking ledger.
+- Universal Canteen and Equipment Rental modal.
+- Booking ledger with Ledger vs Audit History view toggle.
 - Refund-policy modal.
 - Resource catalog and add-resource modal.
 - Sports management and add-sport modal.
+- Earnings & Financial Intelligence dashboard (audited net income, daily trends, cashier collections, cash drawer note calculator, and granular transaction ledger).
 - Reports dashboard and CSV export fallback.
-- API service that communicates with the API gateway.
+- **Payment Gateway Settings Modal (`PaymentGatewaySettingsModal.tsx`):** BYOK Razorpay self-service configuration for owners.
+- API service connecting to Spring Cloud Gateway.
+
 
 Current state approach:
 

@@ -11,17 +11,26 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
         jdbc:
           time_zone: UTC
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
 
 app:
   razorpay:
-    key-id: ${RAZORPAY_KEY_ID:rzp_test_dummy}
-    key-secret: ${RAZORPAY_KEY_SECRET:dummy_secret}
+    key-id: ${RAZORPAY_KEY_ID:}
+    key-secret: ${RAZORPAY_KEY_SECRET:}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+    api-url: ${RAZORPAY_API_URL:https://api.razorpay.com/v1}
+  internal:
+    booking-base-url: ${BOOKING_SERVICE_URL:http://localhost:8083}
+    service-token: ${INTERNAL_SERVICE_TOKEN:}
 
 management:
   endpoints:

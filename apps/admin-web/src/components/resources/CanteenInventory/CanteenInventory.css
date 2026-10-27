@@ -1,0 +1,75 @@
+/* CanteenInventory CSS */
+.canteen-inventory-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.canteen-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.canteen-stat-card {
+  padding: 16px 20px;
+  border-radius: var(--radius-sm, 10px);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.canteen-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canteen-table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.canteen-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.canteen-th {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-dim, #64748b);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.canteen-td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.canteen-stock-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}

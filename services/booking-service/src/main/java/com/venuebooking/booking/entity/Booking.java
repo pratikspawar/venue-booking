@@ -102,6 +102,10 @@ public class Booking {
     @Column(name = "coupon_id")
     private Long couponId;
 
+    @Column(name = "reminder_sent", nullable = false)
+    @Builder.Default
+    private Boolean reminderSent = false;
+
     @Version
     @Column(nullable = false)
     @Builder.Default

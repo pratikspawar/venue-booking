@@ -3,7 +3,9 @@ package com.venuebooking.booking.service;
 import com.venuebooking.booking.dto.ResourceAvailabilityResponseDto;
 import com.venuebooking.booking.dto.SlotAvailabilityDto;
 import com.venuebooking.booking.entity.BookingSlot;
+import com.venuebooking.booking.entity.Booking;
 import com.venuebooking.booking.repository.BookingSlotRepository;
+import com.venuebooking.booking.repository.BookingRepository;
 import com.venuebooking.catalog.entity.*;
 import com.venuebooking.catalog.repository.PricingRuleRepository;
 import com.venuebooking.catalog.repository.ResourceBlockRepository;
@@ -28,11 +30,12 @@ public class SlotAvailabilityService {
     private final ResourceRepository resourceRepository;
     private final VenueHoursRepository venueHoursRepository;
     private final BookingSlotRepository bookingSlotRepository;
+    private final BookingRepository bookingRepository;
     private final ResourceBlockRepository resourceBlockRepository;
     private final PricingRuleRepository pricingRuleRepository;
     private final PricingService pricingService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ResourceAvailabilityResponseDto getAvailability(Long resourceId, LocalDate date) {
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> BusinessException.notFound("Resource not found"));
@@ -43,6 +46,7 @@ public class SlotAvailabilityService {
         }
 
         ZoneId venueZone = ZoneId.of(venue.getTimezone() != null ? venue.getTimezone() : "Asia/Kolkata");
+        releaseExpiredHolds(resource.getId(), Instant.now());
         int dayOfWeek = date.getDayOfWeek().getValue(); // 1=Mon ... 7=Sun
 
         Optional<VenueHours> hoursOpt = venueHoursRepository.findByVenueIdAndDayOfWeek(venue.getId(), dayOfWeek);
@@ -64,11 +68,11 @@ public class SlotAvailabilityService {
         Instant rangeEndUtc = dayEndLocal.toInstant();
 
         // 1. Fetch reserved booking slots
-        Set<Instant> bookedSlots = bookingSlotRepository
+        List<BookingSlot> reservedSlots = bookingSlotRepository
                 .findSlotsForResourceAndRange(resource.getId(), rangeStartUtc, rangeEndUtc)
-                .stream()
-                .map(BookingSlot::getSlotStart)
-                .collect(Collectors.toSet());
+                ;
+        Map<Instant, Booking> reservationByStart = reservedSlots.stream()
+                .collect(Collectors.toMap(BookingSlot::getSlotStart, BookingSlot::getBooking));
 
         // 2. Fetch overlapping resource maintenance blocks
         List<ResourceBlock> blocks = resourceBlockRepository.findOverlappingBlocks(resource.getId(), rangeStartUtc, rangeEndUtc);
@@ -89,8 +93,13 @@ public class SlotAvailabilityService {
 
             if (cellStartUtc.isBefore(nowUtc.minus(Duration.ofMinutes(5)))) {
                 status = SlotAvailabilityDto.SlotStatus.PAST;
-            } else if (bookedSlots.contains(cellStartUtc)) {
-                status = SlotAvailabilityDto.SlotStatus.BOOKED;
+            } else if (reservationByStart.containsKey(cellStartUtc)) {
+                Booking reservation = reservationByStart.get(cellStartUtc);
+                status = reservation.getStatus() == Booking.Status.HELD
+                        && reservation.getHoldExpiresAt() != null
+                        && reservation.getHoldExpiresAt().isAfter(nowUtc)
+                        ? SlotAvailabilityDto.SlotStatus.HELD
+                        : SlotAvailabilityDto.SlotStatus.BOOKED;
             } else if (isCellBlocked(cellStartUtc, cellEndUtc, blocks)) {
                 status = SlotAvailabilityDto.SlotStatus.BLOCKED;
             }
@@ -126,6 +135,14 @@ public class SlotAvailabilityService {
                 .date(date)
                 .slots(slotDtos)
                 .build();
+    }
+
+    private void releaseExpiredHolds(Long resourceId, Instant now) {
+        List<Booking> expired = bookingRepository.findExpiredHoldsForResource(resourceId, now);
+        if (expired.isEmpty()) return;
+        bookingSlotRepository.deleteByBookingIdIn(expired.stream().map(Booking::getId).toList());
+        expired.forEach(b -> b.setStatus(Booking.Status.EXPIRED));
+        bookingRepository.saveAll(expired);
     }
 
     private boolean isCellBlocked(Instant cellStart, Instant cellEnd, List<ResourceBlock> blocks) {

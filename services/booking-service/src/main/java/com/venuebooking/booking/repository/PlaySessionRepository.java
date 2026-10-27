@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,4 +34,7 @@ public interface PlaySessionRepository extends JpaRepository<PlaySession, Long> 
         ORDER BY ps.startedAt ASC
     """)
     List<PlaySession> findActiveSessionsByVenueId(@Param("venueId") Long venueId);
+
+    List<PlaySession> findByTenantIdAndStartedAtBetween(Long tenantId, Instant start, Instant end);
 }
+

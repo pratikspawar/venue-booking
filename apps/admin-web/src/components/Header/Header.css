@@ -1,0 +1,61 @@
+/* Header component styles */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.app-header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.app-header-subtitle {
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.9rem;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-header-shift-panel {
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-header-shift-label {
+  font-size: 0.72rem;
+  color: var(--text-dim, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-header-shift-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-emerald, #10b981);
+}
+
+.app-header-shift-breakdown {
+  border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  padding-left: 14px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}

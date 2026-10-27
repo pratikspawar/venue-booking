@@ -26,12 +26,16 @@ public class OwnerCatalogController {
     private final VenueService venueService;
     private final ResourceService resourceService;
 
-    private Long requireTenantId() {
-        Long tenantId = TenantContext.getTenantId();
+    private Long requireTenantId(Long headerTenantId) {
+        Long tenantId = headerTenantId != null ? headerTenantId : TenantContext.getTenantId();
         if (tenantId == null) {
             throw BusinessException.forbidden("Tenant context required for owner operations");
         }
         return tenantId;
+    }
+
+    private Long requireTenantId() {
+        return requireTenantId(null);
     }
 
     @PostMapping("/venues")
@@ -74,13 +78,23 @@ public class OwnerCatalogController {
         return ResponseEntity.ok(resourceService.updateResource(requireTenantId(), id, dto));
     }
 
+    @GetMapping("/resources/{id}/pricing-rules")
+    @Operation(summary = "Get pricing rules", description = "Get dynamic weekday/weekend and peak/off-peak rates for resource")
+    public ResponseEntity<List<PricingRuleDto>> getPricingRules(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantIdHeader
+    ) {
+        return ResponseEntity.ok(resourceService.getPricingRules(requireTenantId(tenantIdHeader), id));
+    }
+
     @PutMapping("/resources/{id}/pricing-rules")
     @Operation(summary = "Configure pricing rules", description = "Set up peak/off-peak and weekday/weekend rates")
     public ResponseEntity<Map<String, String>> setPricingRules(
             @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantIdHeader,
             @RequestBody List<PricingRuleDto> rules
     ) {
-        resourceService.setPricingRules(requireTenantId(), id, rules);
+        resourceService.setPricingRules(requireTenantId(tenantIdHeader), id, rules);
         return ResponseEntity.ok(Map.of("message", "Pricing rules updated successfully"));
     }
 

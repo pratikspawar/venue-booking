@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useVenueStore } from '../../store/useVenueStore';
-import { Plus, Search, Gamepad2, Settings, Trophy } from 'lucide-react';
+import { Plus, Search, Gamepad2, Trophy, TrendingUp, Layers, UtensilsCrossed } from 'lucide-react';
+import { PricingRulesModal } from './PricingRulesModal';
+import { EquipmentInventory } from './EquipmentInventory';
+import { CanteenInventory } from './CanteenInventory';
 
 export const ResourceCatalog = () => {
-  const { resources, sports, openAddResourceModal, openAddSportModal } = useVenueStore();
+  const { resources, sports, tenant, canteenCatalog, openAddResourceModal, openAddSportModal } = useVenueStore();
+  const [activeSection, setActiveSection] = useState<'RESOURCES' | 'EQUIPMENT' | 'CANTEEN'>('RESOURCES');
   const [filterSport, setFilterSport] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [pricingResource, setPricingResource] = useState<any | null>(null);
 
   const filterList = ['ALL', ...sports.map((s) => s.code)];
 
@@ -17,10 +22,87 @@ export const ResourceCatalog = () => {
 
   return (
     <div className="glass-panel" style={{ padding: '28px' }}>
+      {/* Top Section Tabs */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
+          gap: '8px',
+          marginBottom: '24px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          paddingBottom: '14px',
+        }}
+      >
+        <button
+          onClick={() => setActiveSection('RESOURCES')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            background: activeSection === 'RESOURCES' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+            border: activeSection === 'RESOURCES' ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid transparent',
+            color: activeSection === 'RESOURCES' ? '#a5b4fc' : '#94a3b8',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Gamepad2 size={16} />
+          <span>Consoles, Tables & Pitches ({resources.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSection('EQUIPMENT')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            background: activeSection === 'EQUIPMENT' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+            border: activeSection === 'EQUIPMENT' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
+            color: activeSection === 'EQUIPMENT' ? '#6ee7b7' : '#94a3b8',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Layers size={16} />
+          <span>Rentable Equipment & Gear Inventory</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSection('CANTEEN')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            background: activeSection === 'CANTEEN' ? 'rgba(234, 179, 8, 0.2)' : 'transparent',
+            border: activeSection === 'CANTEEN' ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid transparent',
+            color: activeSection === 'CANTEEN' ? '#fde047' : '#94a3b8',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <UtensilsCrossed size={16} />
+          <span>Canteen & Snack Bar Menu ({canteenCatalog.length})</span>
+        </button>
+      </div>
+
+      {activeSection === 'EQUIPMENT' ? (
+        <EquipmentInventory venueId={tenant?.id || 1} />
+      ) : activeSection === 'CANTEEN' ? (
+        <CanteenInventory />
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '20px',
           flexWrap: 'wrap',
@@ -176,9 +258,21 @@ export const ResourceCatalog = () => {
                   </span>
                 </td>
                 <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                  <button className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.8rem', gap: '6px' }}>
-                    <Settings size={14} />
-                    <span>Configure</span>
+                  <button
+                    type="button"
+                    onClick={() => setPricingResource(r)}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      gap: '6px',
+                      background: 'rgba(99, 102, 241, 0.1)',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                      color: '#a5b4fc',
+                    }}
+                  >
+                    <TrendingUp size={14} color="var(--accent-primary)" />
+                    <span>Dynamic Rates</span>
                   </button>
                 </td>
               </tr>
@@ -186,6 +280,15 @@ export const ResourceCatalog = () => {
           })}
         </tbody>
       </table>
+
+      {/* Dynamic Pricing Rules Modal */}
+      <PricingRulesModal
+        isOpen={!!pricingResource}
+        onClose={() => setPricingResource(null)}
+        resource={pricingResource}
+      />
+        </>
+      )}
     </div>
   );
 };

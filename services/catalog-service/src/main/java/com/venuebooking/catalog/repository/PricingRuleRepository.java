@@ -11,5 +11,7 @@ public interface PricingRuleRepository extends JpaRepository<PricingRule, Long> 
 
     List<PricingRule> findByResourceIdOrderByPriorityDesc(Long resourceId);
 
+    void deleteByResourceId(Long resourceId);
+
     List<PricingRule> findByTenantId(Long tenantId);
 }

@@ -11,12 +11,16 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
         jdbc:
           time_zone: UTC
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
 
 app:
   jwt:
@@ -24,7 +28,19 @@ app:
     access-token-expiration-ms: 900000
     refresh-token-expiration-ms: 2592000000
   sms:
-    provider: ${SMS_PROVIDER:mock}
+    provider: ${SMS_PROVIDER:disabled}
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from: ${TWILIO_FROM:}
+      messaging-service-sid: ${TWILIO_MESSAGING_SERVICE_SID:}
+      status-callback: ${TWILIO_STATUS_CALLBACK:}
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY:}
+      template-id: ${MSG91_TEMPLATE_ID:}
+      otp-expiry-minutes: ${MSG91_OTP_EXPIRY_MINUTES:5}
+  auth:
+    otp-hash-pepper: ${OTP_HASH_PEPPER:local-only-change-this-pepper}
 
 management:
   endpoints:

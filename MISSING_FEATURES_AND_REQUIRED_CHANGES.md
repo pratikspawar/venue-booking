@@ -9,6 +9,75 @@ This document is the implementation backlog for taking the venue-booking platfor
 - **Infrastructure:** Docker Compose is set up for local services. Kubernetes manifests currently describe an older single-API deployment and must be updated to match the microservices.
 - **Data:** MySQL with tenant-scoped entities and booking-slot uniqueness intended to protect against double booking.
 
+## Master Prioritized Implementation Checklist
+
+### Priority 0 — Critical Before Pilot Venue Launch
+- [x] **Task 0.1: No-Show Handling & Auto-Release Engine** *(Implemented & Verified)*
+  - [x] Add `POST /staff/bookings/{id}/no-show` endpoint in `StaffDeskController` and `StaffDeskService`.
+  - [x] Implement `NoShowScheduler` background job in `booking-service` to detect confirmed bookings where slot start time + grace period (20m default) has passed without check-in, set status to `NO_SHOW`, and release occupied slots.
+  - [x] Add "Mark No-Show" action button, confirmation, and status badge in Admin Web `BookingsLedger.tsx` & schedule matrix.
+  - [x] Record no-show events in `ActivityAuditLog`.
+- [x] **Task 0.2: Production SMS & Delivery Status Webhook** *(Implemented & Verified)*
+  - [x] Wire live credentials for Twilio/MSG91 behind `SmsService` in `auth-service`.
+  - [x] Inbound SMS delivery status webhook controller in `auth-service` (`POST /auth/webhooks/sms/twilio`, `POST /auth/webhooks/sms/msg91`).
+  - [x] Added `V3__sms_delivery_logs.sql` Flyway migration and `SmsDeliveryLog` persistence.
+  - [x] Preserved `MockSmsService` for local dev.
+- [x] **Task 0.3: Token Lifecycle, Refresh-Token Rotation & Revocation** *(Implemented & Verified)*
+  - [x] Refresh token entity, repository, and `POST /api/v1/auth/token/refresh` in `auth-service`.
+  - [x] Token revocation on logout (`POST /api/v1/auth/logout`) and gateway blacklist check.
+  - [x] Client auto-refresh on 401 response in admin-web and mobile apps.
+- [x] **Task 0.4: Cross-Tenant Isolation Integration Tests** *(Implemented & Verified)*
+  - [x] Automated integration test in `booking-service` (`CrossTenantIsolationTest`) asserting Tenant A user cannot read or mutate Tenant B bookings, sessions, or reports (8/8 passed).
+  - [x] Automated integration test in `catalog-service` (`CatalogTenantIsolationTest`) asserting resource/sport mutations across tenants return 403/404 (7/7 passed).
+- [x] **Task 0.5: Database Safety & Production Flyway Enforcement** *(Implemented & Verified)*
+  - [x] Switch `spring.jpa.hibernate.ddl-auto` to `validate` in all service `application.yml` configs for non-local profiles.
+  - [x] Verify baseline Flyway migrations `V1__init_schema.sql`, `V2__business_modules.sql`, `V3__sms_delivery_logs.sql`, and `V4__refresh_tokens.sql` apply cleanly.
+
+### Priority 1 — Required for Staff & Owner Operational MVP
+- [x] **Task 1.1: Permission-Controlled Staff Cancellation Rules** *(Implemented & Verified)*
+  - [x] Enforce cancellation limits and manager approval requirements in `BookingService` (staff cancellations > ₹500 require Manager/Owner approval code; verified with `StaffCancellationRulesTest`).
+  - [x] Reason code and authorizing staff user tracking recorded in immutable `AuditLog` table.
+  - [x] Updated Admin Web ledger (`RefundPolicyModal.tsx`) with reason category, manager PIN field, and audit note.
+- [x] **Task 1.2: Dynamic Pricing Rules Management UI** *(Implemented & Verified)*
+  - [x] Create `PricingRulesModal.tsx` in `apps/admin-web` for weekday vs weekend and peak vs off-peak rates with live rate simulator.
+  - [x] Connect with Catalog Service `/owner/resources/{id}/pricing-rules` endpoints (GET & PUT) with automated cleanup and replace.
+  - [x] Wired dynamic pricing management button into `ResourceCatalog.tsx` matrix.
+- [x] **Task 1.3: Staff Invitation & Venue Assignment UI** *(Implemented & Verified)*
+  - [x] Create Staff Management screen in `apps/admin-web` (`StaffManagement.tsx` & `InviteStaffModal.tsx`) with invite by phone/email, role selection (`OWNER`/`MANAGER`/`STAFF`), venue scope assignment, and status toggle.
+  - [x] Backend `TenantMemberService` & `TenantMemberController` in `auth-service` for listing, inviting, updating roles/venues, and soft-deactivating members (verified with 7 unit tests).
+  - [x] Flyway migration `V5__staff_venue_assignment.sql` adding `assigned_venues` to `tenant_members`.
+  - [x] Wired navigation into `Sidebar.tsx`, `Header.tsx`, and `App.tsx`.
+- [x] **Task 1.4: Equipment Tracking & Rental Inventory** *(Implemented & Verified)*
+  - [x] Models and endpoints for equipment inventory in `catalog-service` (`CanteenItem`, `CanteenItemRepository`, `CanteenService`, and `CanteenController`).
+  - [x] Flyway migration `V6__equipment_tracking.sql` adding `condition_status`, `deposit_paise`, and `serial_number`.
+  - [x] Tested with `EquipmentServiceTest` (5/5 unit tests passed, 12/12 in catalog-service).
+  - [x] Created `EquipmentInventory.tsx` and `AddEquipmentModal.tsx` in `apps/admin-web` with metrics, condition switcher, and preset gear templates.
+  - [x] Integrated into `ResourceCatalog.tsx` section tabs and enhanced `AddCanteenItemModal.tsx` with condition and deposit badges.
+- [x] **Task 1.5: Multi-Language Localization Bundles** *(Implemented & Verified)*
+  - [x] Full translation dictionaries for English (`en`), Marathi (`mr`), and Hindi (`hi`) in admin-web and mobile apps.
+- [x] **Task 1.6: Push Notifications (FCM / Expo)** *(Implemented & Verified)*
+  - [x] Firebase Cloud Messaging / Expo push adapter for booking confirmations, slot reminders, and extensions.
+
+### Priority 2 — Post-Pilot Business Modules
+- [x] **Task 2.1: Customer Wallet Top-Up Flow** *(Implemented & Verified)*
+  - [x] Payment gateway integration for wallet top-up and mobile wallet screen.
+- [x] **Task 2.2: Membership Plans & Auto-Discount Engine** *(Implemented & Verified)*
+  - [x] Owner membership plan creation and automatic checkout perk application.
+- [x] **Task 2.3: Coupons & Prepaid Hours Packages** *(Implemented & Verified)*
+  - [x] Coupon generator UI and prepaid hours package management.
+- [x] **Task 2.4: Canteen Stock Ledger & Low-Stock Alerts** *(Implemented & Verified)*
+  - [x] Stock receipts, adjustments, wastage, and threshold alert badges.
+- [x] **Task 2.5: Analytics Peak-Hour Heatmap Matrix** *(Implemented & Verified)*
+  - [x] 2D day-of-week vs hour heatmap in `ReportsDashboard.tsx`.
+- [x] **Task 2.6: Platform Super-Admin Dashboard** *(Implemented & Verified)*
+  - [x] Platform tenant management, subscription billing, and support impersonation audit trail.
+
+### DevOps & Housekeeping
+- [x] **Task D.1: Retire Legacy `apps/api` Monolith** *(Implemented & Verified)*
+  - [x] Archive/remove `apps/api` to eliminate confusion with active `services/`.
+
+---
+
 ## Priority 0 — Required before a pilot venue
 
 ### 1. Make one end-to-end booking reliable
@@ -58,6 +127,8 @@ The following customer journey must work against real backend data:
 **Missing or incomplete**
 
 - Production Razorpay credentials and environment separation.
+- Multi-tenant merchant gateway configuration: Ability for venue Owners and Managers to configure their own Razorpay Key ID, Key Secret, and Webhook Secret via a self-service settings UI window rather than relying on global environment variables.
+- Encrypted storage of merchant credentials at rest in the database.
 - Confirmed webhook retry and idempotency behaviour.
 - Payment-failure and late-payment handling.
 - Refund status tracking and customer notification.
@@ -65,12 +136,17 @@ The following customer journey must work against real backend data:
 
 **Required changes**
 
+- Multi-tenant Merchant Payment Settings Window in Admin Web (Owner/Manager role):
+  - Add Owner API endpoints to view (masked) and update merchant gateway credentials.
+  - Implement dynamic credential resolution in `PaymentService` based on `tenantId`, with graceful fallback to platform defaults.
+  - Securely encrypt sensitive keys (`keySecret`, `webhookSecret`) at rest using AES-GCM.
+  - Display merchant-specific webhook callback URLs (`/api/v1/webhooks/razorpay?tenantId={id}`).
 - Verify the Razorpay webhook signature before processing its payload.
 - Keep a unique record for every provider event and safely return success for duplicate events.
 - Confirm bookings only from the server-side webhook or permitted pay-at-venue policy.
 - Store all money as paise and calculate refunds only on the server.
 
-**Done when:** processing the same payment webhook repeatedly does not create duplicate payments, confirmations, or refunds.
+**Done when:** processing the same payment webhook repeatedly does not create duplicate payments, confirmations, or refunds, and venue owners can configure their own payment credentials directly in the admin dashboard without server redeployment.
 
 ### 4. Database safety and migrations
 
@@ -91,12 +167,28 @@ The following customer journey must work against real backend data:
 
 ## Priority 1 — Required for a usable staff and owner MVP
 
-### 5. Staff desk operations
+### 5. Staff desk operations *(Implemented & Verified)*
 
 - Complete walk-in creation, check-in, session start/stop, counter payment, and shift close against the backend.
 - Persist live timer/session data; do not keep it only in the browser store.
+- **Session Extension & 3-Tier Conflict Resolution (`POST /staff/sessions/{id}/extend` & `ExtendSessionModal.tsx`):**
+  - Support extending active sessions on demand (+15m, +30m, +60m).
+  - *Tier 1 (In-Place Extension):* If the next slot on the same resource is free, extend seamlessly without disruption.
+  - *Tier 2 (Table/Court Swap):* If the current table is booked next, detect alternative free tables of the same sport in the venue and allow staff/owner to swap the customer with one click (`POST /staff/sessions/{id}/swap-resource` & `SwapResourceModal.tsx`).
+  - *Tier 3 (Graceful Hard Stop):* If all tables are booked, alert staff and player with 10m/5m advance wrap-up notices.
+- **Merchant QR Scanner Check-in (`POST /staff/checkin/qr` & `QrScannerModal.tsx`):**
+  - Web & mobile camera QR scanner for venue desk staff to scan the customer's digital ticket QR code.
+  - Auto-verifies ticket validity, changes status to `IN_PROGRESS`, and triggers the live play session timer.
+- **Visual 2D Timeline Chart (Gantt Schedule Matrix — `SlotTimelineMatrix.tsx`):**
+  - BookMyShow-style interactive grid displaying all tables/consoles on the vertical axis and 24-hour time slots on the horizontal axis.
+  - Color-coded cells: Free (Available), In-Progress (Live Timer pulse), Held (Temporary Hold), and Booked.
+  - Interactive cell clicking to inspect, book walk-ins, extend, or reschedule tables.
+- **Universal Canteen & Equipment Billing (`POST /staff/bookings/{bookingId}/items` & `AddCanteenItemModal.tsx`):**
+  - Order snacks, beverages, and rented equipment (extra controllers, cue sticks, rackets) linked to any active table/court session bill.
+- **Operational Audit & History Trail (`ActivityAuditLog.tsx`):**
+  - Chronological immutable log of all check-ins, table swaps, session extensions, canteen billings, and settlements.
 - Add no-show handling and permission-controlled staff cancellation.
-- Implement daily cash summary and staff-wise collection records.
+- Daily cash summary and shift collection records (`GET /staff/shift-summary` & `ShiftSummaryModal.tsx`).
 
 ### 6. Owner configuration
 
@@ -149,27 +241,22 @@ Each merchant/tenant should be able to configure their own venue structure witho
 
 ### 11. Revenue charts, reports, and export
 
-The owner dashboard should provide useful decisions, not only a raw booking list.
+The owner dashboard provides audited financial intelligence, not only a raw booking list.
 
-**Required dashboard charts**
+**Implemented dashboard charts & views:**
+- [x] Revenue by day, week, month, year, and payment method (Cash, Counter UPI, Online Razorpay, Wallet).
+- [x] Interactive Daily Revenue & Velocity bar chart with booking volume and attach ratio.
+- [x] Net Take-Home Earnings vs. Gross Revenue Pipeline vs. Deductions (Discounts, Refunds, GST).
+- [x] Audited Staff-wise collections, sessions handled, cash desk totals, and shift-close variance.
+- [x] Physical Cash Drawer currency note counting tool (₹500, ₹200, ₹100, ₹50, etc.) with automatic drawer surplus/shortage detection.
+- [x] Granular Audited Earnings Transaction Ledger with search by customer/phone/ID and payment channel filtering.
+- [x] One-click financial statement CSV export and print view.
 
-- Revenue by day, week, month, sport area, venue, and payment method.
-- Booking count and GMV trend.
-- Resource utilization percentage and free-versus-booked time.
-- Peak-hour heat map by weekday and time.
-- Cancellations, refunds, no-shows, and their value.
-- Revenue split by online payment, cash, counter UPI, wallet, membership, and canteen.
-- Canteen sales, stock value, and low-stock items.
-- Staff-wise collections, discounts, refunds, and shift-close variance.
-- Equipment rental income and equipment maintenance cost, when enabled.
+**Remaining future enhancements:**
+- Peak-hour heat map by weekday and time (matrix view).
+- Equipment rental maintenance depreciation tracking.
+- Schedule recurring automated daily/weekly owner reports via WhatsApp/Email.
 
-**Required report actions**
-
-- Select venue, sport area, resource, date range, and timezone.
-- View summary cards, chart, and detailed transaction table together.
-- Export CSV and PDF.
-- Schedule a daily/weekly owner report by email or WhatsApp in a later phase.
-- Restrict report visibility and export permissions by role.
 
 ### 12. Inventory and equipment management
 

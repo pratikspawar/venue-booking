@@ -1,0 +1,74 @@
+/* RefundPolicyModal CSS Styles */
+.refund-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(5, 8, 22, 0.82);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.refund-modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(135deg, rgba(22, 27, 46, 0.98), rgba(15, 18, 30, 0.99));
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(239, 68, 68, 0.15);
+}
+
+.refund-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.refund-modal-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+}
+
+.refund-modal-snapshot {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  padding: 14px;
+  margin-bottom: 16px;
+  font-size: 0.86rem;
+}
+
+.refund-modal-policy-box {
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.refund-modal-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  text-align: center;
+}
+
+.refund-modal-input-field {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 0.85rem;
+}

@@ -3,11 +3,13 @@ package com.venuebooking.booking.service;
 import com.venuebooking.booking.dto.*;
 import com.venuebooking.booking.entity.Booking;
 import com.venuebooking.booking.entity.BookingItem;
+import com.venuebooking.booking.entity.BookingSlot;
 import com.venuebooking.booking.entity.PlaySession;
 import com.venuebooking.booking.repository.BookingItemRepository;
 import com.venuebooking.booking.repository.BookingRepository;
 import com.venuebooking.booking.repository.BookingSlotRepository;
 import com.venuebooking.booking.repository.PlaySessionRepository;
+import java.util.ArrayList;
 import com.venuebooking.catalog.entity.PricingRule;
 import com.venuebooking.catalog.entity.Resource;
 import com.venuebooking.catalog.entity.Venue;
@@ -15,6 +17,7 @@ import com.venuebooking.catalog.repository.PricingRuleRepository;
 import com.venuebooking.catalog.repository.ResourceRepository;
 import com.venuebooking.catalog.service.PricingService;
 import com.venuebooking.common.BusinessException;
+import com.venuebooking.notification.service.PushNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ public class StaffDeskService {
     private final PricingRuleRepository pricingRuleRepository;
     private final PricingService pricingService;
     private final BookingItemRepository bookingItemRepository;
+    private final PushNotificationService pushNotificationService;
 
     @Transactional
     public PlaySessionResponseDto startSession(StartSessionRequestDto req, Long staffUserId) {
@@ -109,9 +113,13 @@ public class StaffDeskService {
     }
 
     @Transactional
-    public PlaySessionResponseDto stopSession(Long sessionId, StopSessionRequestDto req, Long staffUserId) {
+    public PlaySessionResponseDto stopSession(Long sessionId, StopSessionRequestDto req, Long staffUserId, Long tenantId) {
         PlaySession session = playSessionRepository.findById(sessionId)
                 .orElseThrow(() -> BusinessException.notFound("Session not found"));
+
+        if (tenantId != null && !tenantId.equals(session.getTenantId())) {
+            throw BusinessException.notFound("Session not found");
+        }
 
         if (session.getEndedAt() != null) {
             throw new BusinessException("SESSION_ALREADY_CLOSED", "Session was already closed at " + session.getEndedAt());
@@ -198,6 +206,10 @@ public class StaffDeskService {
         return toSessionDto(session);
     }
 
+    public PlaySessionResponseDto stopSession(Long sessionId, StopSessionRequestDto req, Long staffUserId) {
+        return stopSession(sessionId, req, staffUserId, null);
+    }
+
     @Transactional(readOnly = true)
     public List<PlaySessionResponseDto> getActiveSessions(Long venueId, Long tenantId) {
         List<PlaySession> sessions;
@@ -213,13 +225,241 @@ public class StaffDeskService {
     }
 
     @Transactional
-    public void markCheckin(Long bookingId) {
+    public void markCheckin(Long bookingId, Long tenantId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> BusinessException.notFound("Booking not found"));
+
+        if (tenantId != null && !tenantId.equals(booking.getTenantId())) {
+            throw BusinessException.notFound("Booking not found");
+        }
+
         if (booking.getStatus() == Booking.Status.HELD || booking.getStatus() == Booking.Status.CONFIRMED) {
             booking.setStatus(Booking.Status.CONFIRMED);
             bookingRepository.save(booking);
         }
+    }
+
+    public void markCheckin(Long bookingId) {
+        markCheckin(bookingId, null);
+    }
+
+    @Transactional
+    public void markNoShow(Long bookingId, Long staffUserId, Long tenantId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> BusinessException.notFound("Booking not found: " + bookingId));
+
+        if (tenantId != null && !tenantId.equals(booking.getTenantId())) {
+            throw BusinessException.notFound("Booking not found: " + bookingId);
+        }
+
+        if (booking.getStatus() == Booking.Status.COMPLETED ||
+            booking.getStatus() == Booking.Status.IN_PROGRESS ||
+            booking.getStatus() == Booking.Status.CANCELLED ||
+            booking.getStatus() == Booking.Status.NO_SHOW) {
+            throw new BusinessException("INVALID_STATUS", "Cannot mark as no-show when booking status is " + booking.getStatus());
+        }
+
+        // Release reserved slots so other players or walk-ins can book
+        bookingSlotRepository.deleteByBookingIdIn(List.of(booking.getId()));
+
+        booking.setStatus(Booking.Status.NO_SHOW);
+        bookingRepository.save(booking);
+
+        pushNotificationService.sendNoShowNotice(booking);
+
+        log.info("Booking #{} manually marked as NO_SHOW by staff #{}. Reserved slots released.",
+                bookingId, staffUserId != null ? staffUserId : 1L);
+    }
+
+    public void markNoShow(Long bookingId, Long staffUserId) {
+        markNoShow(bookingId, staffUserId, null);
+    }
+
+    @Transactional
+    public ExtendSessionResponseDto extendSession(Long sessionId, ExtendSessionRequestDto req, Long staffUserId, Long tenantId) {
+        PlaySession session = playSessionRepository.findById(sessionId)
+                .orElseThrow(() -> BusinessException.notFound("Play session not found"));
+
+        if (tenantId != null && !tenantId.equals(session.getTenantId())) {
+            throw BusinessException.notFound("Play session not found");
+        }
+
+        if (session.getEndedAt() != null) {
+            throw new BusinessException("SESSION_ALREADY_CLOSED", "Cannot extend an ended session");
+        }
+
+        Booking booking = bookingRepository.findById(session.getBookingId())
+                .orElseThrow(() -> BusinessException.notFound("Booking not found"));
+
+        Resource currentResource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+        int extraMinutes = req != null && req.getExtraMinutes() > 0 ? req.getExtraMinutes() : 30;
+
+        Instant currentEnd = (booking.getEndUtc() != null && booking.getEndUtc().isAfter(Instant.now()))
+                ? booking.getEndUtc() : Instant.now();
+        Instant newEnd = currentEnd.plus(Duration.ofMinutes(extraMinutes));
+
+        // Check if next slot on current resource is occupied
+        List<BookingSlot> conflictingSlots = bookingSlotRepository.findSlotsForResourceAndRange(
+                booking.getResourceId(), currentEnd, newEnd
+        ).stream().filter(bs -> !bs.getBookingId().equals(booking.getId())).toList();
+
+        if (!conflictingSlots.isEmpty()) {
+            // Conflict detected! Check alternative resources of the same sport
+            List<ResourceAlternativeDto> alternatives = new ArrayList<>();
+            if (currentResource != null && booking.getVenueId() != null) {
+                List<Resource> sameSportResources = resourceRepository.findByVenueId(booking.getVenueId()).stream()
+                        .filter(r -> r.getStatus() == Resource.Status.ACTIVE)
+                        .filter(r -> r.getSportId().equals(currentResource.getSportId()))
+                        .filter(r -> !r.getId().equals(booking.getResourceId()))
+                        .toList();
+
+                for (Resource alt : sameSportResources) {
+                    List<BookingSlot> altSlots = bookingSlotRepository.findSlotsForResourceAndRange(alt.getId(), currentEnd, newEnd);
+                    if (altSlots.isEmpty()) {
+                        String sportName = alt.getSport() != null ? alt.getSport().getNameEn() : "Sport";
+                        alternatives.add(ResourceAlternativeDto.builder()
+                                .resourceId(alt.getId())
+                                .resourceName(alt.getName())
+                                .sportName(sportName)
+                                .build());
+                    }
+                }
+            }
+
+            String conflictMsg = alternatives.isEmpty()
+                    ? "Conflict: Current table is booked in upcoming slot, and all other tables are full."
+                    : "Conflict: Current table is booked next. Move to an available table to continue playing.";
+
+            return ExtendSessionResponseDto.builder()
+                    .success(false)
+                    .conflict(true)
+                    .message(conflictMsg)
+                    .sessionId(sessionId)
+                    .currentResourceId(booking.getResourceId())
+                    .newEndUtc(currentEnd)
+                    .alternativeResources(alternatives)
+                    .build();
+        }
+
+        // In-place extension: No conflict!
+        booking.setEndUtc(newEnd);
+        bookingRepository.save(booking);
+
+        pushNotificationService.sendSessionExtended(booking, extraMinutes);
+
+        log.info("Play session #{} extended by {} mins until {}", sessionId, extraMinutes, newEnd);
+        return ExtendSessionResponseDto.builder()
+                .success(true)
+                .conflict(false)
+                .message("Session successfully extended by " + extraMinutes + " minutes")
+                .sessionId(sessionId)
+                .currentResourceId(booking.getResourceId())
+                .newEndUtc(newEnd)
+                .alternativeResources(List.of())
+                .build();
+    }
+
+    @Transactional
+    public PlaySessionResponseDto swapSessionResource(Long sessionId, SwapResourceRequestDto req, Long staffUserId) {
+        PlaySession session = playSessionRepository.findById(sessionId)
+                .orElseThrow(() -> BusinessException.notFound("Play session not found"));
+
+        if (session.getEndedAt() != null) {
+            throw new BusinessException("SESSION_ALREADY_CLOSED", "Cannot swap table on an ended session");
+        }
+
+        Booking booking = bookingRepository.findById(session.getBookingId())
+                .orElseThrow(() -> BusinessException.notFound("Booking not found"));
+
+        Resource targetResource = resourceRepository.findById(req.getTargetResourceId())
+                .orElseThrow(() -> BusinessException.notFound("Target resource not found"));
+
+        if (targetResource.getStatus() != Resource.Status.ACTIVE) {
+            throw new BusinessException("RESOURCE_INACTIVE", "Target resource is currently inactive");
+        }
+
+        Instant currentEnd = (booking.getEndUtc() != null && booking.getEndUtc().isAfter(Instant.now()))
+                ? booking.getEndUtc() : Instant.now().plus(Duration.ofMinutes(30));
+
+        // Verify target resource has no conflicting slots during remaining time
+        List<BookingSlot> targetSlots = bookingSlotRepository.findSlotsForResourceAndRange(
+                targetResource.getId(), Instant.now(), currentEnd
+        ).stream().filter(bs -> !bs.getBookingId().equals(booking.getId())).toList();
+
+        if (!targetSlots.isEmpty()) {
+            throw new BusinessException("TARGET_RESOURCE_OCCUPIED", "Target table is already reserved during this time");
+        }
+
+        Long oldResourceId = booking.getResourceId();
+        bookingSlotRepository.deleteByBookingId(booking.getId());
+        booking.setResourceId(targetResource.getId());
+        bookingRepository.save(booking);
+
+        log.info("Session #{} swapped from resource #{} to target resource #{} ('{}'). Reason: {}",
+                sessionId, oldResourceId, targetResource.getId(), targetResource.getName(), req.getReason());
+
+        return toSessionDto(session);
+    }
+
+    @Transactional
+    public QrCheckinResponseDto qrCheckin(QrCheckinRequestDto req, Long staffUserId) {
+        if (req == null || req.getQrData() == null || req.getQrData().isBlank()) {
+            throw BusinessException.badRequest("QR data cannot be empty");
+        }
+
+        // Parse booking ID from raw ID, "BOOKING:12", or URL
+        String raw = req.getQrData().trim();
+        String idStr = raw.replaceAll("[^0-9]", "");
+        if (idStr.isEmpty()) {
+            throw BusinessException.badRequest("Invalid QR code format");
+        }
+
+        Long bookingId = Long.parseLong(idStr);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> BusinessException.notFound("Booking #" + bookingId + " not found"));
+
+        if (booking.getStatus() == Booking.Status.CANCELLED || booking.getStatus() == Booking.Status.EXPIRED) {
+            throw new BusinessException("INVALID_BOOKING_STATUS", "Booking is " + booking.getStatus() + " and cannot be checked in");
+        }
+
+        // Mark checked in
+        booking.setStatus(Booking.Status.IN_PROGRESS);
+        bookingRepository.save(booking);
+
+        // Auto-start play session if not already running
+        PlaySession session = playSessionRepository.findByBookingId(booking.getId())
+                .orElseGet(() -> playSessionRepository.save(PlaySession.builder()
+                        .tenantId(booking.getTenantId())
+                        .bookingId(booking.getId())
+                        .startedAt(Instant.now())
+                        .startedBy(staffUserId != null ? staffUserId : 1L)
+                        .build()));
+
+        Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+        String custName = booking.getCustomer() != null ? booking.getCustomer().getName()
+                : (booking.getWalkinName() != null ? booking.getWalkinName() : "App Customer");
+        String custPhone = booking.getCustomer() != null ? booking.getCustomer().getPhone()
+                : (booking.getWalkinPhone() != null ? booking.getWalkinPhone() : "-");
+        String resName = resource != null ? resource.getName() : "Resource #" + booking.getResourceId();
+        String sportName = (resource != null && resource.getSport() != null) ? resource.getSport().getNameEn() : "Sport";
+
+        String timeWindow = (booking.getStartUtc() != null && booking.getEndUtc() != null)
+                ? (booking.getStartUtc() + " - " + booking.getEndUtc()) : "Live Session";
+
+        log.info("QR check-in validated for booking #{} (Session #{}, Customer: {})", booking.getId(), session.getId(), custName);
+
+        return QrCheckinResponseDto.builder()
+                .success(true)
+                .message("Check-in verified! Play session timer started.")
+                .bookingId(booking.getId())
+                .sessionId(session.getId())
+                .customerName(custName)
+                .customerPhone(custPhone)
+                .resourceName(resName)
+                .sportName(sportName)
+                .timeWindow(timeWindow)
+                .status("IN_PROGRESS")
+                .build();
     }
 
     private PlaySessionResponseDto toSessionDto(PlaySession s) {

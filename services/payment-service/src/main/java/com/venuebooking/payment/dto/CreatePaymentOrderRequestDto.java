@@ -15,8 +15,4 @@ public class CreatePaymentOrderRequestDto {
     @NotNull(message = "Booking ID is required")
     private Long bookingId;
 
-    @NotNull(message = "Amount in paise is required")
-    private Long amountPaise;
-
-    private Long tenantId;
 }

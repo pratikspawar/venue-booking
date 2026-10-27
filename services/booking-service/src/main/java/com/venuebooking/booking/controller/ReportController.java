@@ -1,5 +1,6 @@
 package com.venuebooking.booking.controller;
 
+import com.venuebooking.booking.dto.ComprehensiveEarningsResponseDto;
 import com.venuebooking.booking.dto.ComprehensiveReportResponseDto;
 import com.venuebooking.booking.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,18 @@ public class ReportController {
         return ResponseEntity.ok(report);
     }
 
+    @GetMapping("/earnings")
+    @Operation(summary = "Get audited earnings, cashier collections, and daily revenue breakdown")
+    public ResponseEntity<ComprehensiveEarningsResponseDto> getEarningsReport(
+            @RequestHeader("X-Tenant-Id") Long tenantId,
+            @RequestParam(required = false) Long venueId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate
+    ) {
+        ComprehensiveEarningsResponseDto earnings = reportService.getComprehensiveEarnings(tenantId, venueId, startDate, endDate);
+        return ResponseEntity.ok(earnings);
+    }
+
     @GetMapping("/export/csv")
     @Operation(summary = "Export filtered booking records and revenue ledger as CSV")
     public ResponseEntity<byte[]> exportBookingsCsv(
@@ -45,8 +58,9 @@ public class ReportController {
         byte[] bytes = csvData.getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"venue-booking-report.csv\"")
-                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(bytes);
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"venue-booking-report.csv\"")
+            .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+            .body(bytes);
     }
 }
+

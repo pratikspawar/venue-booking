@@ -64,12 +64,17 @@ public class JwtService {
     }
 
     public String generateRefreshToken(User user) {
+        return generateRefreshToken(user, UUID.randomUUID().toString());
+    }
+
+    public String generateRefreshToken(User user, String familyId) {
         Instant now = Instant.now();
         Instant expiry = now.plusMillis(refreshTokenExpirationMs);
 
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("phone", user.getPhone())
+                .claim("familyId", familyId)
                 .claim("type", "REFRESH")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
@@ -93,5 +98,19 @@ public class JwtService {
 
     public long getAccessTokenExpirationMs() {
         return accessTokenExpirationMs;
+    }
+
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
+    }
+
+    public static String hashToken(String token) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not available", e);
+        }
     }
 }

@@ -77,13 +77,15 @@ public class ResourceService {
         Resource resource = resourceRepository.findByIdAndTenantId(resourceId, tenantId)
                 .orElseThrow(() -> BusinessException.notFound("Resource not found or access denied"));
 
+        pricingRuleRepository.deleteByResourceId(resource.getId());
+
         List<PricingRule> rules = rulesDto.stream()
                 .map(r -> PricingRule.builder()
                         .tenantId(tenantId)
                         .resourceId(resource.getId())
                         .dayType(r.getDayType() != null ? r.getDayType() : PricingRule.DayType.ANY)
-                        .startTime(r.getStartTime())
-                        .endTime(r.getEndTime())
+                        .startTime(r.getStartTime() != null ? r.getStartTime() : java.time.LocalTime.of(0, 0))
+                        .endTime(r.getEndTime() != null ? r.getEndTime() : java.time.LocalTime.of(23, 59))
                         .pricePerSlotPaise(r.getPricePerSlotPaise())
                         .pricePerHourPaise(r.getPricePerHourPaise())
                         .minChargeMinutes(r.getMinChargeMinutes() != null ? r.getMinChargeMinutes() : 0)
@@ -94,6 +96,28 @@ public class ResourceService {
 
         pricingRuleRepository.saveAll(rules);
         log.info("Saved {} pricing rules for resource #{}", rules.size(), resourceId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PricingRuleDto> getPricingRules(Long tenantId, Long resourceId) {
+        Resource resource = resourceRepository.findByIdAndTenantId(resourceId, tenantId)
+                .orElseThrow(() -> BusinessException.notFound("Resource not found or access denied"));
+
+        return pricingRuleRepository.findByResourceIdOrderByPriorityDesc(resource.getId())
+                .stream()
+                .map(p -> PricingRuleDto.builder()
+                        .id(p.getId())
+                        .resourceId(p.getResourceId())
+                        .dayType(p.getDayType())
+                        .startTime(p.getStartTime())
+                        .endTime(p.getEndTime())
+                        .pricePerSlotPaise(p.getPricePerSlotPaise())
+                        .pricePerHourPaise(p.getPricePerHourPaise())
+                        .minChargeMinutes(p.getMinChargeMinutes())
+                        .roundingMinutes(p.getRoundingMinutes())
+                        .priority(p.getPriority())
+                        .build())
+                .toList();
     }
 
     @Transactional

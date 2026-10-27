@@ -23,7 +23,7 @@ spring:
         - id: booking-service-routes
           uri: http://${BOOKING_SERVICE_HOST:localhost}:${BOOKING_SERVICE_PORT:8083}
           predicates:
-            - Path=/api/v1/resources/**, /api/v1/bookings/**, /api/v1/staff/**
+            - Path=/api/v1/resources/**, /api/v1/bookings/**, /api/v1/staff/**, /api/v1/reports/**, /api/v1/wallets/**, /api/v1/coupons/**, /api/v1/memberships/**, /api/v1/prepaid-packages/**
 
         # 4. Payment Service Routes
         - id: payment-service-routes

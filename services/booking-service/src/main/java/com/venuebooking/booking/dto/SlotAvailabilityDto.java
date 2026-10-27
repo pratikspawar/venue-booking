@@ -20,6 +20,7 @@ public class SlotAvailabilityDto {
 
     public enum SlotStatus {
         AVAILABLE,
+        HELD,
         BOOKED,
         BLOCKED,
         PAST

@@ -28,4 +28,10 @@ public class CreateCanteenItemDto {
     private Integer lowStockThreshold;
 
     private Boolean isEquipment;
+
+    private String conditionStatus;
+
+    private Long depositPaise;
+
+    private String serialNumber;
 }

@@ -1,9 +1,10 @@
 import React from 'react';
 import { useVenueStore } from '../../store/useVenueStore';
-import { X, DollarSign, Clock, ShoppingBag, CreditCard, Banknote, Download } from 'lucide-react';
+import { X, DollarSign, Clock, ShoppingBag, CreditCard, Banknote, Download, Coins } from 'lucide-react';
 
 export const ShiftSummaryModal: React.FC = () => {
-  const { isShiftSummaryModalOpen, closeShiftSummaryModal, bookings, resources, tenant } = useVenueStore();
+  const { isShiftSummaryModalOpen, closeShiftSummaryModal, bookings, resources, tenant, setActiveTab } = useVenueStore();
+
 
   if (!isShiftSummaryModalOpen) return null;
 
@@ -188,25 +189,50 @@ export const ShiftSummaryModal: React.FC = () => {
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => alert('Shift reconciliation PDF exported successfully.')}
-            style={{
-              padding: '10px 16px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid var(--border-subtle)',
-              color: '#fff',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <Download size={14} /> Export Shift PDF
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => alert('Shift reconciliation PDF exported successfully.')}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-subtle)',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Download size={14} /> Export Shift PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                closeShiftSummaryModal();
+                setActiveTab('earnings');
+              }}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                color: '#34d399',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+              }}
+            >
+              <Coins size={14} /> View All Earnings
+            </button>
+          </div>
 
           <button
             type="button"
@@ -225,6 +251,7 @@ export const ShiftSummaryModal: React.FC = () => {
             Close & Reconcile
           </button>
         </div>
+
       </div>
     </div>
   );

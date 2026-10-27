@@ -1,13 +1,16 @@
 import React from 'react';
 import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text, StatusBar } from 'react-native';
+import { Provider } from 'react-redux';
+import { store } from './src/store';
 import { useCustomerStore } from './src/store/useCustomerStore';
 import { ExploreScreen } from './src/screens/ExploreScreen';
 import { MyBookingsScreen } from './src/screens/MyBookingsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { CheckoutModal } from './src/components/CheckoutModal';
 import { AuthOtpModal } from './src/components/AuthOtpModal';
+import { WalletTopupModal } from './src/components/WalletTopupModal';
 
-export default function App() {
+function MainApp() {
   const { activeTab, setActiveTab, myBookings } = useCustomerStore();
 
   const activeCount = myBookings.filter(
@@ -77,7 +80,16 @@ export default function App() {
       {/* Global Bottom Sheets & Modals */}
       <CheckoutModal />
       <AuthOtpModal />
+      <WalletTopupModal />
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <Provider store={store}>
+      <MainApp />
+    </Provider>
   );
 }
 

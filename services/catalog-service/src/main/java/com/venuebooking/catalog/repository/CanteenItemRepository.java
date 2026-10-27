@@ -11,5 +11,11 @@ public interface CanteenItemRepository extends JpaRepository<CanteenItem, Long> 
 
     List<CanteenItem> findByVenueIdAndActiveTrue(Long venueId);
 
+    List<CanteenItem> findByVenueIdAndIsEquipmentTrueAndActiveTrue(Long venueId);
+
     List<CanteenItem> findByTenantId(Long tenantId);
+
+    List<CanteenItem> findByTenantIdAndIsEquipmentTrueAndActiveTrue(Long tenantId);
+
+    java.util.Optional<CanteenItem> findByIdAndVenueId(Long id, Long venueId);
 }

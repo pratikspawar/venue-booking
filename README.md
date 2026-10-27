@@ -7,9 +7,10 @@ A cloud-ready multi-tenant SaaS platform tailored for gaming & sports lounges (P
 ```
 .
 ├── apps/
-│   ├── api/             # Spring Boot 3 modular monolith (Java 21, MySQL 8, JPA, Flyway)
+│   ├── api/             # Legacy standalone backend; active backend lives in services/
 │   ├── admin-web/       # React + Vite + TypeScript dashboard for Owners & Shift Staff
-│   └── mobile/          # React Native (Expo) customer slot booking & wallet app
+│   └── mobile/          # React Native customer slot booking app
+├── services/            # Active Spring Boot microservices and API gateway
 ├── packages/
 │   └── shared/          # Shared domain types, enums, and API interfaces
 ├── deploy/
@@ -44,19 +45,30 @@ A cloud-ready multi-tenant SaaS platform tailored for gaming & sports lounges (P
 
 ```bash
 cd deploy/docker
-docker-compose up --build
+Copy-Item .env.example .env
+# Set unique local secrets in .env before starting
+docker compose up --build
 ```
-* **MySQL 8**: `localhost:3306` (Database: `venue_booking`)
-* **Spring Boot API**: `http://localhost:8080/api/v1`
+* **MySQL 8**: `localhost:3306` (Database: `venue_booking`; bound to loopback)
+* **API Gateway**: `http://localhost:8080/api/v1`
 * **Admin Web Portal**: `http://localhost:3000`
 
-### 2. Local Manual Development
+Compose starts the active gateway, auth, catalog, booking, and payment services. The backend containers are private to the Compose network. Flyway migrations run from the shared service migration resources; `apps/api` is retained as legacy code and is not started by Compose.
 
-#### Backend API
+### 2. Mobile app
+
+The customer app uses live API data and requires the backend to be running. Set `API_BASE_URL` in `apps/mobile/src/services/api.ts` for the target device (Android emulator uses `http://10.0.2.2:8080/api/v1`; a physical phone needs the development machine's LAN address). Razorpay checkout uses the native `react-native-razorpay` module, so use an Expo development build/prebuild rather than Expo Go. Configure Razorpay test credentials and webhook secret in the local Compose `.env` for online payments; pay-at-venue remains available when enabled by the venue.
+
+### 3. Local Manual Development
+
+#### Microservices Backend Stack (Java 21 / Spring Boot 3)
 ```bash
-cd apps/api
-# Uses Java 21
-mvn spring-boot:run
+cd services
+# Build shared common-library and all microservices
+mvn clean install
+
+# Or start services directly via Docker Compose or individual Spring Boot runners:
+# docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
 #### Admin Web Panel

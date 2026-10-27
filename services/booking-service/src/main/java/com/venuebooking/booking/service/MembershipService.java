@@ -8,7 +8,7 @@ import com.venuebooking.booking.entity.CustomerMembership;
 import com.venuebooking.booking.entity.MembershipPlan;
 import com.venuebooking.booking.repository.CustomerMembershipRepository;
 import com.venuebooking.booking.repository.MembershipPlanRepository;
-import com.venuebooking.common.exception.ResourceNotFoundException;
+import com.venuebooking.common.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,10 +54,29 @@ public class MembershipService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<MembershipPlanDto> getAllPlans(Long tenantId) {
+        return membershipPlanRepository.findByTenantIdOrderByIdAsc(tenantId).stream()
+                .map(this::toPlanDto)
+                .toList();
+    }
+
+    @Transactional
+    public MembershipPlanDto togglePlanActive(Long tenantId, Long planId) {
+        MembershipPlan plan = membershipPlanRepository.findById(planId)
+                .orElseThrow(() -> BusinessException.notFound("Membership plan not found: " + planId));
+        if (!plan.getTenantId().equals(tenantId)) {
+            throw new BusinessException("FORBIDDEN", "Plan does not belong to this venue.");
+        }
+        plan.setActive(!Boolean.TRUE.equals(plan.getActive()));
+        plan = membershipPlanRepository.save(plan);
+        return toPlanDto(plan);
+    }
+
     @Transactional
     public CustomerMembershipDto purchaseMembership(Long tenantId, PurchaseMembershipRequestDto request) {
         MembershipPlan plan = membershipPlanRepository.findById(request.planId())
-                .orElseThrow(() -> new ResourceNotFoundException("Membership plan not found: " + request.planId()));
+                .orElseThrow(() -> BusinessException.notFound("Membership plan not found: " + request.planId()));
 
         if (!plan.getTenantId().equals(tenantId) || !plan.getActive()) {
             throw new IllegalArgumentException("Plan is inactive or not available for this venue.");
@@ -102,6 +121,23 @@ public class MembershipService {
         return customerMembershipRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(tenantId, userId).stream()
                 .map(this::toCustomerMembershipDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerMembershipDto> getTenantMemberships(Long tenantId) {
+        return customerMembershipRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(this::toCustomerMembershipDto)
+                .toList();
+    }
+
+    @Transactional
+    public void deductFreeMinutes(Long membershipId, int minutes) {
+        customerMembershipRepository.findById(membershipId).ifPresent(m -> {
+            int current = m.getRemainingFreeMinutes() != null ? m.getRemainingFreeMinutes() : 0;
+            m.setRemainingFreeMinutes(Math.max(0, current - minutes));
+            customerMembershipRepository.save(m);
+            log.info("Deducted {} free minutes from membership #{} (remaining: {})", minutes, membershipId, m.getRemainingFreeMinutes());
+        });
     }
 
     private MembershipPlanDto toPlanDto(MembershipPlan p) {

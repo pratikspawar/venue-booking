@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { useCustomerStore } from '../store/useCustomerStore';
 import { BookingTicketCard } from '../components/BookingTicketCard';
 
 export const MyBookingsScreen: React.FC = () => {
-  const { myBookings, setActiveTab } = useCustomerStore();
+  const { myBookings, setActiveTab, fetchMyBookings, user } = useCustomerStore();
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchMyBookings().catch((error) => setLoadError(error instanceof Error ? error.message : 'Could not load bookings'));
+  }, [fetchMyBookings, user?.token]);
   const [filter, setFilter] = useState<'UPCOMING' | 'HISTORY'>('UPCOMING');
 
   const upcoming = myBookings.filter(
     (b) => b.status === 'CONFIRMED' || b.status === 'HELD' || b.status === 'IN_PROGRESS'
   );
   const history = myBookings.filter(
-    (b) => b.status === 'COMPLETED' || b.status === 'CANCELLED'
+    (b) => b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'EXPIRED' || b.status === 'NO_SHOW'
   );
 
   const currentList = filter === 'UPCOMING' ? upcoming : history;
@@ -21,7 +27,7 @@ export const MyBookingsScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>My Game Passes</Text>
         <Text style={styles.sub}>
-          Present the QR Pass at the venue desk for quick check-in.
+          Show your booking reference at the venue desk.
         </Text>
       </View>
 
@@ -48,6 +54,7 @@ export const MyBookingsScreen: React.FC = () => {
 
       {/* List */}
       <View style={styles.list}>
+        {loadError && <Text style={styles.emptySub}>{loadError}</Text>}
         {currentList.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🎟️</Text>

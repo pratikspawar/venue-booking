@@ -247,6 +247,11 @@ CREATE TABLE play_sessions (              -- for TIME_PLAYED and walk-ins
 
 The unique key on `booking_slots (resource_id, slot_start)` is what makes double booking impossible, regardless of how many app instances or threads run. Cancelled, expired and no-show bookings delete their `booking_slots` rows (the booking row stays for history). MySQL has no partial unique index, so deleting rows is the simplest correct approach.
 
+#### 4.3.1 Session Extension & Table Swap Resolution
+1. **In-Place Extension:** When extending an active session, the engine checks whether `booking_slots` for the resource and upcoming slot time are free. If free, it creates the additional slot record and extends `booking.end_utc`.
+2. **Table Swap on Conflict:** If the current resource has an upcoming reservation, the system queries alternative resources belonging to the same `sport_id` within the venue. If an alternative resource is free, staff can move the session (`booking.resource_id` updated) and free the initial resource for the arriving guest.
+3. **Hard Stop:** When all resources for that sport are fully booked, extensions are blocked and desk timers sound hand-off notifications 10 minutes prior to completion.
+
 ### 4.4 Payments
 
 ```sql
@@ -289,6 +294,20 @@ CREATE TABLE webhook_events (             -- idempotency for gateway callbacks
   processed   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_event (gateway, event_id)
+);
+
+CREATE TABLE tenant_gateway_configs (     -- per-tenant payment gateway credentials (BYOK)
+  id                      BIGINT PRIMARY KEY AUTO_INCREMENT,
+  tenant_id               BIGINT NOT NULL,
+  gateway                 VARCHAR(20) NOT NULL DEFAULT 'RAZORPAY',
+  key_id                  VARCHAR(100) NOT NULL,
+  encrypted_key_secret    VARCHAR(500) NOT NULL,
+  encrypted_webhook_secret VARCHAR(500),
+  is_active               BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_tenant_gateway (tenant_id, gateway),
+  KEY ix_tenant_gateway (tenant_id)
 );
 ```
 
@@ -374,6 +393,16 @@ WHERE resource_id = :rid AND slot_start >= :dayStartUtc AND slot_start < :dayEnd
 Cache the venue hours and pricing rules (Caffeine, a few minutes). Do not cache availability for long; at most a few seconds.
 
 ### 6.2 Creating a booking hold
+
+#### Seat-selection style temporary blocking
+
+Use the same interaction pattern as cinema seat selection: as soon as a customer selects a resource and time slot and proceeds to checkout, reserve the selected grid cells temporarily and show a visible countdown (using the venue's configured `hold_minutes`). While the hold is active, availability responses must report those cells as `HELD` (or unavailable) to every other customer. Only the customer who owns the hold may continue checkout or release it directly. Do not treat a hold as a confirmed booking.
+
+The existing `bookings` row in `HELD` state plus its `booking_slots` rows is the temporary block; no separate lock table is needed. Insert the booking and all its slot rows in one transaction. The unique key on `(resource_id, slot_start)` is the authoritative concurrency guard: if another customer already holds or booked any requested cell, roll back the entire attempt and return HTTP 409 (`SLOT_TAKEN`). Revalidate availability at hold creation; a prior availability response is only a snapshot and does not reserve anything.
+
+On successful payment, transition the booking from `HELD` to `CONFIRMED` and retain its slot rows. On checkout cancellation, payment failure, or hold expiry, transition to the appropriate terminal state and delete its slot rows transactionally so those cells immediately become available. The expiry worker must only release rows for holds that are still `HELD` and expired, and must be safe to run on multiple instances. If payment arrives after expiry, attempt to reacquire the same cells under the unique constraint; if reacquisition fails, issue an automatic refund and notify the customer. The client countdown is informational; the server's expiry timestamp is authoritative.
+
+The availability API should distinguish at least `AVAILABLE`, `HELD`, `BOOKED`, and `BLOCKED` for staff and operational views. Customer-facing responses may show held cells as unavailable without exposing another customer's identity or booking details.
 
 ```java
 @Transactional

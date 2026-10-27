@@ -35,11 +35,14 @@ public class SecurityConfig {
                         // Public Endpoints
                         .requestMatchers(
                                 "/api/v1/auth/**",
+                                "/auth/**",
                                 "/api/v1/actuator/**",
+                                "/actuator/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/api/v1/webhooks/**"
+                                "/api/v1/webhooks/**",
+                                "/webhooks/**"
                         ).permitAll()
                         // Public venue and slot browsing
                         .requestMatchers(HttpMethod.GET, "/api/v1/venues/**", "/api/v1/resources/**").permitAll()

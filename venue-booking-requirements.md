@@ -107,6 +107,7 @@ Build constraints: solo developer, MVP in 2-3 months. Stack: Spring Boot, React 
 - A booking reserves a slot. For time-based games, the session may run over the slot: overtime is billed at the standard rate if the next slot is free, and staff are alerted if it clashes with the next booking.
 - Double booking is prevented at the database level (unique constraint on resource, date and start time).
 - A slot is held for 5 to 10 minutes while payment is in progress, then released automatically.
+- **Temporary slot blocking (seat-selection style):** when a customer selects one or more slots and starts checkout, the system immediately marks those exact resource/time cells as temporarily held for that customer, similar to selecting seats in a cinema app. Other customers must see them as temporarily unavailable and cannot select or pay for them while the hold is active. Show a countdown in checkout; on successful payment, convert the hold to a confirmed booking. On cancellation, payment failure, checkout abandonment, or timeout, release the slots automatically so they become available again. A hold is not a confirmed booking, and availability must be rechecked atomically when creating it so simultaneous attempts cannot both succeed.
 - Taxes (GST) configurable per tenant; invoice generated for each paid booking.
 
 ### 5.6 Payments

@@ -15,4 +15,6 @@ public interface CustomerMembershipRepository extends JpaRepository<CustomerMemb
             Long tenantId, Long userId, CustomerMembership.Status status, Instant now);
 
     List<CustomerMembership> findByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
+
+    List<CustomerMembership> findByTenantIdOrderByCreatedAtDesc(Long tenantId);
 }

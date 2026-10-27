@@ -36,10 +36,11 @@ public class StaffDeskController {
     @Operation(summary = "Stop live play session", description = "Stops the session timer, calculates billable minutes with rounding, and finalizes invoice")
     public ResponseEntity<PlaySessionResponseDto> stopSession(
             @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantId,
             @RequestHeader(value = "X-User-Id", required = false) Long staffUserId,
             @RequestBody(required = false) StopSessionRequestDto requestDto
     ) {
-        PlaySessionResponseDto response = staffDeskService.stopSession(id, requestDto, staffUserId);
+        PlaySessionResponseDto response = staffDeskService.stopSession(id, requestDto, staffUserId, tenantId);
         return ResponseEntity.ok(response);
     }
 
@@ -54,8 +55,22 @@ public class StaffDeskController {
 
     @PostMapping("/bookings/{id}/checkin")
     @Operation(summary = "Mark customer checked-in", description = "Marks an advance booking as customer arrived at venue")
-    public ResponseEntity<Void> checkinBooking(@PathVariable Long id) {
-        staffDeskService.markCheckin(id);
+    public ResponseEntity<Void> checkinBooking(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantId
+    ) {
+        staffDeskService.markCheckin(id, tenantId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/bookings/{id}/no-show")
+    @Operation(summary = "Mark booking as no-show", description = "Marks a confirmed booking as no-show when customer fails to arrive, releasing occupied slots")
+    public ResponseEntity<Void> markNoShow(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantId,
+            @RequestHeader(value = "X-User-Id", required = false) Long staffUserId
+    ) {
+        staffDeskService.markNoShow(id, staffUserId, tenantId);
         return ResponseEntity.noContent().build();
     }
 
@@ -83,5 +98,35 @@ public class StaffDeskController {
             @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantId
     ) {
         return ResponseEntity.ok(staffDeskService.getShiftSummary(venueId, tenantId));
+    }
+
+    @PostMapping("/sessions/{id}/extend")
+    @Operation(summary = "Extend live play session", description = "Extends session in-place or identifies alternative tables if conflict occurs")
+    public ResponseEntity<com.venuebooking.booking.dto.ExtendSessionResponseDto> extendSession(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long tenantId,
+            @RequestHeader(value = "X-User-Id", required = false) Long staffUserId,
+            @RequestBody(required = false) com.venuebooking.booking.dto.ExtendSessionRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(staffDeskService.extendSession(id, requestDto, staffUserId, tenantId));
+    }
+
+    @PostMapping("/sessions/{id}/swap-resource")
+    @Operation(summary = "Swap live session table or resource", description = "Transfers an active session to an alternative available table/court")
+    public ResponseEntity<PlaySessionResponseDto> swapSessionResource(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", required = false) Long staffUserId,
+            @Valid @RequestBody com.venuebooking.booking.dto.SwapResourceRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(staffDeskService.swapSessionResource(id, requestDto, staffUserId));
+    }
+
+    @PostMapping("/checkin/qr")
+    @Operation(summary = "QR Scanner Check-in", description = "Scans merchant booking QR code to instantly verify customer and start live session")
+    public ResponseEntity<com.venuebooking.booking.dto.QrCheckinResponseDto> qrCheckin(
+            @RequestHeader(value = "X-User-Id", required = false) Long staffUserId,
+            @Valid @RequestBody com.venuebooking.booking.dto.QrCheckinRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(staffDeskService.qrCheckin(requestDto, staffUserId));
     }
 }
